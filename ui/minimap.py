@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import time
+
 import pygame
 
 from core.fog_of_war import VisibilitySnapshot, VisibilityState
 from core.game import GameState
-from core.map import TerrainType
+from core.map import HexCoord, TerrainType
 from core.units import Side
 
 from .camera import Camera
@@ -24,8 +26,16 @@ _TERRAIN_MINI_COLOURS = {
     TerrainType.FORTIFICATION: (90, 80, 105),
 }
 
+_PULSE_DURATION = 0.5  # seconds
+
 
 class Minimap:
+    def __init__(self) -> None:
+        self._pulses: list[tuple[HexCoord, float]] = []
+
+    def add_pulse(self, coord: HexCoord) -> None:
+        self._pulses.append((coord, time.time()))
+
     def draw(
         self,
         surface: pygame.Surface,
@@ -77,6 +87,27 @@ class Minimap:
             fh = int((br.r - tl.r) * cell_h)
             frustum_rect = pygame.Rect(fx, fy, fw, fh)
             pygame.draw.rect(surface, (255, 255, 255), frustum_rect, 1)
+
+        # Draw conflict pulses
+        now = time.time()
+        active_pulses = []
+        overlay = None
+        for coord, start_t in self._pulses:
+            elapsed = now - start_t
+            if elapsed >= _PULSE_DURATION:
+                continue
+            active_pulses.append((coord, start_t))
+            progress = elapsed / _PULSE_DURATION
+            radius = max(1, int((1.0 - progress) * 4))
+            cx = int(rect.x + coord.q * cell_w + cell_w / 2)
+            cy = int(rect.y + coord.r * cell_h + cell_h / 2)
+            if overlay is None:
+                overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+            alpha = int((1.0 - progress) * 200)
+            pygame.draw.circle(overlay, (255, 255, 255, alpha), (cx, cy), radius)
+        if overlay is not None:
+            surface.blit(overlay, (0, 0))
+        self._pulses = active_pulses
 
     def click_to_coord(self, game: GameState, rect: pygame.Rect, pos: tuple[int, int]):
         if not rect.collidepoint(pos):

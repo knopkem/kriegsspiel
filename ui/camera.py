@@ -25,6 +25,12 @@ class Camera:
         self.offset_x += dx
         self.offset_y += dy
 
+    def center_on(self, coord: "HexCoord") -> None:
+        """Pan so that coord is centred on screen."""
+        wx, wy = self.axial_to_world(coord)
+        self.offset_x = self.width / 2 - wx
+        self.offset_y = self.height / 2 - wy
+
     def zoom_at(self, factor: float, anchor: tuple[int, int]) -> None:
         old_size = self.hex_size
         self.zoom = max(0.5, min(2.5, self.zoom * factor))

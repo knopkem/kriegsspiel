@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import math
+import time
+
 import pygame
 
+import config
+from ai.difficulty import AIDifficulty
 from ai.opponent import SimpleAICommander
 from core.fog_of_war import VisibilitySnapshot
 from core.game import GameState
@@ -11,9 +16,10 @@ from core.map import HexCoord
 from core.orders import OrderStatus
 from core.scenario import load_builtin_scenario
 from core.tutorial import TutorialDirector
-from core.units import Side, UnitType
+from core.units import MoraleState, Side, UnitType
 
 from . import themes
+from .animation import AnimationManager, RangedFireAnimation, MeleeAnimation, DamageNumberAnimation, CascadeRingAnimation
 from .audio import AudioEngine
 from .bitmap_font import BitmapFont
 from .camera import Camera
@@ -27,19 +33,27 @@ from .unit_renderer import UnitRenderer
 
 
 class KriegsspielApp:
-    def __init__(self, *, scenario_name: str = "skirmish_small", seed: int = 1) -> None:
+    def __init__(self, *, scenario_name: str = "skirmish_small", seed: int = 1,
+                 difficulty: str = "medium", game_state=None) -> None:
         pygame.init()
         self.screen = pygame.display.set_mode(themes.WINDOW_SIZE)
         pygame.display.set_caption("Kriegsspiel Prototype")
         self.clock = pygame.time.Clock()
 
-        self.font = BitmapFont(scale=2)
-        self.small_font = BitmapFont(scale=1)
+        # L2: derive font scales from config.TEXT_SCALE (1=small, 2=medium, 3=large)
+        self.font = BitmapFont(scale=config.TEXT_SCALE + 1)
+        self.small_font = BitmapFont(scale=config.TEXT_SCALE)
 
-        self.scenario = load_builtin_scenario(scenario_name)
-        self.game = GameState.from_scenario(self.scenario, rng_seed=seed)
+        self._initial_scenario_name = scenario_name
+        self._initial_seed = seed
+        if game_state is not None:
+            self.game = game_state
+            self.scenario = None
+        else:
+            self.scenario = load_builtin_scenario(scenario_name)
+            self.game = GameState.from_scenario(self.scenario, rng_seed=seed)
         self.player_side = Side.BLUE
-        self.ai = SimpleAICommander(Side.RED, seed=seed + 100)
+        self.ai = SimpleAICommander(Side.RED, difficulty=AIDifficulty(difficulty), seed=seed + 100)
         self.tutorial = TutorialDirector() if scenario_name == "tutorial" else None
 
         self.camera = Camera(*themes.WINDOW_SIZE, zoom=1.0, offset_x=200, offset_y=80)
@@ -69,6 +83,7 @@ class KriegsspielApp:
         # B12: end-game summary
         self.game_over: bool = False
         self.victory_report = None
+        self._replay_button = pygame.Rect(0, 0, 0, 0)
 
         # B13: toasts
         self.toasts = ToastManager()
@@ -76,8 +91,22 @@ class KriegsspielApp:
         # B14: help overlay
         self.show_help: bool = False
 
+        # L2: flag set when text size changes; fonts are recreated next frame
+        self._fonts_dirty: bool = False
+        self._text_scale_btn_rect: pygame.Rect = pygame.Rect(0, 0, 0, 0)
+
+        # K3: casualty table scroll offset
+        self._casualty_scroll: int = 0
+
         # F5: audio engine (gracefully no-ops if mixer unavailable)
         self.audio = AudioEngine()
+
+        # Animation framework (H1-H7)
+        self.anim_manager = AnimationManager()
+
+        # K2: log highlight hex + timestamp
+        self._log_highlight_hex: HexCoord | None = None
+        self._log_highlight_time: float = 0.0
 
     def run(self) -> None:
         running = True
@@ -98,9 +127,11 @@ class KriegsspielApp:
                     if event.button == 2:
                         self.dragging = True
                     elif event.button == 1:
-                        self._handle_left_click(event.pos)
+                        if not self.anim_manager.is_animating:
+                            self._handle_left_click(event.pos)
                     elif event.button == 3:
-                        self._handle_right_click(event.pos)
+                        if not self.anim_manager.is_animating:
+                            self._handle_right_click(event.pos)
                     elif event.button == 4:
                         log_rect = pygame.Rect(
                             180, self.screen.get_height() - 150,
@@ -123,7 +154,13 @@ class KriegsspielApp:
                     self.dragging = False
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
-                        self.paused = not self.paused
+                        if self.pending_move_dest is not None:
+                            self.pending_move_dest = None
+                            self.move_path = []
+                        else:
+                            self.paused = not self.paused
+                    elif event.key == pygame.K_SPACE and self.anim_manager.is_animating:
+                        self.anim_manager.skip_all()
                     elif self.paused:
                         if event.key == pygame.K_q:
                             self.quit_requested = True
@@ -133,6 +170,10 @@ class KriegsspielApp:
             if self.quit_requested:
                 running = False
 
+            # L2: recreate fonts/HUD if text scale changed
+            if self._fonts_dirty:
+                self._apply_text_scale()
+
             self._draw()
             pygame.display.flip()
             self.clock.tick(themes.FPS)
@@ -140,11 +181,50 @@ class KriegsspielApp:
         pygame.quit()
 
     def _handle_left_click(self, pos: tuple[int, int]) -> None:
+        # L2: text scale button in pause menu
+        if self.paused:
+            btn = getattr(self, "_text_scale_btn_rect", None)
+            if btn is not None and btn.collidepoint(pos):
+                config.TEXT_SCALE = (config.TEXT_SCALE % 3) + 1  # cycle 1→2→3→1
+                self._fonts_dirty = True
+            return
+
         if self.context_menu.visible:
             selected = self.context_menu.click(pos)
             if selected is not None:
                 self._execute_context_action(selected, pos)
                 return
+
+        # K9: replay button
+        if self.game_over and self._replay_button.collidepoint(pos):
+            self._restart()
+            return
+
+        # H8: confirm pending move on left-click of the same hex
+        if self.pending_move_dest is not None:
+            clicked_coord = self.camera.screen_to_axial(pos)
+            if clicked_coord == self.pending_move_dest and self.selected_unit_id:
+                unit = self.game.units[self.selected_unit_id]
+                self.game.order_book.issue_move(unit.id, self.pending_move_dest, current_turn=self.game.current_turn)
+                self.audio.play("order_given")
+                self.pending_move_dest = None
+                self.move_path = []
+                return
+            else:
+                # Clicking elsewhere cancels preview
+                self.pending_move_dest = None
+                self.move_path = []
+                # fall through to normal selection
+
+        # K2: click on combat log to pan to event location
+        log_rect = pygame.Rect(180, self.screen.get_height() - 150, self.screen.get_width() - 190, 140)
+        if log_rect.collidepoint(pos):
+            coord = self.hud.combat_log.coord_for_click(pos)
+            if coord is not None:
+                self.camera.center_on(coord)
+                self._log_highlight_hex = coord
+                self._log_highlight_time = time.time()
+            return
 
         minimap_rect = pygame.Rect(10, self.screen.get_height() - 140, 160, 110)
         mini_coord = self.hud.minimap.click_to_coord(self.game, minimap_rect, pos)
@@ -199,11 +279,11 @@ class KriegsspielApp:
         unit = self.game.units[self.selected_unit_id]
         coord = self._context_target_coord
         if action == "Move Here" and coord:
-            self.game.order_book.issue_move(unit.id, coord, current_turn=self.game.current_turn)
+            # H8: Enter preview mode instead of immediately issuing
+            self.pending_move_dest = coord
             self.move_path = (
                 self.game.battle_map.find_path(unit.position, coord, terrain_costs=unit.movement_costs()) or []
             )
-            self.audio.play("order_given")
         elif action == "Attack" and coord:
             enemy = self._top_enemy_unit_at(coord)
             if enemy:
@@ -223,6 +303,22 @@ class KriegsspielApp:
             self.show_help = not self.show_help
             return
 
+        # H7: animation speed controls
+        if key == pygame.K_1:
+            self.anim_manager.set_speed(1.0)
+            return
+        if key == pygame.K_2:
+            self.anim_manager.set_speed(2.0)
+            return
+        if key == pygame.K_4:
+            self.anim_manager.set_speed(4.0)
+            return
+
+        # K1: cycle combat log filter
+        if key == pygame.K_TAB:
+            self.hud.combat_log.cycle_filter()
+            return
+
         if self.game_over:
             if key == pygame.K_r:
                 self._restart()
@@ -231,6 +327,15 @@ class KriegsspielApp:
             return
 
         if key == pygame.K_RETURN:
+            # H8: confirm pending move preview
+            if self.pending_move_dest is not None:
+                unit = self.game.units.get(self.selected_unit_id)
+                if unit:
+                    self.game.order_book.issue_move(unit.id, self.pending_move_dest, current_turn=self.game.current_turn)
+                    self.audio.play("order_given")
+                self.pending_move_dest = None
+                self.move_path = []
+                return
             self._end_turn()
             return
         if self.selected_unit_id is None:
@@ -260,11 +365,11 @@ class KriegsspielApp:
 
     def _end_turn(self) -> None:
         self.ai.issue_orders(self.game)
-        self.game.advance_turn()
+        turn_events = self.game.advance_turn()
 
         routing_this_turn = False
         objective_this_turn = False
-        for event in self.game.event_log[-10:]:
+        for event in turn_events:
             msg_lower = event.message.lower()
             if "rout" in msg_lower or "routing" in msg_lower:
                 self.toasts.add(f"! {event.message[:50]}", colour=(200, 80, 80))
@@ -272,6 +377,18 @@ class KriegsspielApp:
             elif "objective" in msg_lower or "captures" in msg_lower:
                 self.toasts.add(f"* {event.message[:50]}", colour=(50, 200, 80))
                 objective_this_turn = True
+
+            # H2-H6: create animations for turn events
+            if event.coord is not None:
+                screen_pos = self.camera.axial_to_screen(event.coord)
+                if event.category == "combat":
+                    self.anim_manager.add(MeleeAnimation(duration=0.6, hex_pos=screen_pos))
+                elif event.category == "morale":
+                    self.anim_manager.add(CascadeRingAnimation(duration=0.7, hex_pos=screen_pos))
+
+            # K10: minimap pulse for combat events
+            if event.category == "combat" and event.coord is not None:
+                self.hud.minimap.add_pulse(event.coord)
 
         if routing_this_turn:
             self.audio.play("routing")
@@ -299,21 +416,62 @@ class KriegsspielApp:
         )
 
     def _restart(self) -> None:
-        self.game = GameState.from_scenario(self.scenario, rng_seed=self.game.rng_seed)
+        if self.scenario is not None:
+            self.game = GameState.from_scenario(self.scenario, rng_seed=self._initial_seed)
+        else:
+            from core.scenario_generator import generate_skirmish, SkirmishConfig
+            cfg = SkirmishConfig(size="medium", seed=self._initial_seed)
+            self.game = generate_skirmish(cfg, rng_seed=self._initial_seed)
         self.game_over = False
         self.victory_report = None
         self.selected_unit_id = None
         self.move_path = []
+        self.pending_move_dest = None
+
+    def _apply_text_scale(self) -> None:
+        """L2: Recreate fonts and dependent HUD components after a scale change."""
+        self._fonts_dirty = False
+        self.font = BitmapFont(scale=config.TEXT_SCALE + 1)
+        self.small_font = BitmapFont(scale=config.TEXT_SCALE)
+        self.unit_renderer = UnitRenderer(self.small_font)
+        self.hud = HUD(self.font, self.small_font)
+        self.tooltip = Tooltip(self.small_font)
 
     def _draw_move_path(self) -> None:
         if not self.move_path or len(self.move_path) < 2:
             return
         points = [self.camera.axial_to_screen(h) for h in self.move_path]
+        # Draw dashed yellow line
+        dash_len = 8
+        gap_len = 4
         for i in range(len(points) - 1):
-            pygame.draw.line(self.screen, (255, 255, 100), points[i], points[i + 1], 2)
-            if i > 0:
-                pygame.draw.circle(self.screen, (255, 255, 100), points[i], 3)
-        pygame.draw.circle(self.screen, (255, 220, 0), points[-1], 5, 2)
+            p1 = points[i]
+            p2 = points[i + 1]
+            dx = p2[0] - p1[0]
+            dy = p2[1] - p1[1]
+            seg_len = math.sqrt(dx * dx + dy * dy)
+            if seg_len < 1:
+                continue
+            nx = dx / seg_len
+            ny = dy / seg_len
+            pos = 0.0
+            drawing = True
+            while pos < seg_len:
+                end_pos = min(pos + (dash_len if drawing else gap_len), seg_len)
+                if drawing:
+                    start_pt = (int(p1[0] + nx * pos), int(p1[1] + ny * pos))
+                    end_pt = (int(p1[0] + nx * end_pos), int(p1[1] + ny * end_pos))
+                    pygame.draw.line(self.screen, themes.SELECTION, start_pt, end_pt, 2)
+                pos = end_pos
+                drawing = not drawing
+
+        # Ghost unit at destination (semi-transparent circle)
+        if self.pending_move_dest is not None:
+            dest_screen = self.camera.axial_to_screen(self.pending_move_dest)
+            ghost_surf = pygame.Surface((30, 30), pygame.SRCALPHA)
+            pygame.draw.circle(ghost_surf, (255, 220, 90, 128), (15, 15), 12)
+            pygame.draw.circle(ghost_surf, (255, 220, 90, 180), (15, 15), 12, 2)
+            self.screen.blit(ghost_surf, (dest_screen[0] - 15, dest_screen[1] - 15))
 
     def _draw_pause_overlay(self) -> None:
         w, h = self.screen.get_size()
@@ -321,7 +479,7 @@ class KriegsspielApp:
         overlay.fill((0, 0, 0, 140))
         self.screen.blit(overlay, (0, 0))
 
-        box = pygame.Rect(w // 2 - 120, h // 2 - 80, 240, 160)
+        box = pygame.Rect(w // 2 - 140, h // 2 - 110, 280, 220)
         pygame.draw.rect(self.screen, themes.PANEL_BG, box, border_radius=6)
         pygame.draw.rect(self.screen, themes.PANEL_BORDER, box, 1, border_radius=6)
 
@@ -331,10 +489,25 @@ class KriegsspielApp:
         items = [("Resume", "ESC"), ("Quit", "Q")]
         for i, (label, key) in enumerate(items):
             iy = box.y + 50 + i * 36
-            btn = pygame.Rect(box.x + 20, iy, 200, 28)
+            btn = pygame.Rect(box.x + 20, iy, 240, 28)
             pygame.draw.rect(self.screen, (50, 70, 110), btn, border_radius=4)
             text = self.small_font.render(f"{label} ({key})", True, themes.TEXT)
             self.screen.blit(text, text.get_rect(center=btn.center))
+
+        # L2: Text size setting
+        scale_names = {1: "Small", 2: "Medium", 3: "Large"}
+        scale_y = box.y + 50 + len(items) * 36 + 8
+        scale_lbl = self.small_font.render("Text Size:", True, themes.MUTED_TEXT)
+        self.screen.blit(scale_lbl, (box.x + 20, scale_y + 4))
+        scale_btn = pygame.Rect(box.x + 130, scale_y, 110, 28)
+        pygame.draw.rect(self.screen, (45, 65, 90), scale_btn, border_radius=4)
+        pygame.draw.rect(self.screen, themes.PANEL_BORDER, scale_btn, 1, border_radius=4)
+        cur_name = scale_names.get(config.TEXT_SCALE, "Medium")
+        sz_text = self.small_font.render(cur_name, True, themes.SELECTION)
+        self.screen.blit(sz_text, sz_text.get_rect(center=scale_btn.center))
+
+        # Store rect for click detection in _handle_left_click via pause overlay
+        self._text_scale_btn_rect = scale_btn
 
     def _draw_game_over(self) -> None:
         w, h = self.screen.get_size()
@@ -342,13 +515,14 @@ class KriegsspielApp:
         overlay.fill((0, 0, 0, 170))
         self.screen.blit(overlay, (0, 0))
 
-        box = pygame.Rect(w // 2 - 200, h // 2 - 160, 400, 320)
-        pygame.draw.rect(self.screen, themes.PANEL_BG, box, border_radius=8)
-        pygame.draw.rect(self.screen, themes.SELECTION, box, 2, border_radius=8)
-
         report = self.victory_report
         if report is None:
             return
+
+        # K3: Expand box to fit casualty table
+        box = pygame.Rect(w // 2 - 320, h // 2 - 280, 640, 560)
+        pygame.draw.rect(self.screen, themes.PANEL_BG, box, border_radius=8)
+        pygame.draw.rect(self.screen, themes.SELECTION, box, 2, border_radius=8)
 
         winner_text = "DRAW" if report.winner is None else f"{report.winner.value.upper()} WINS"
         level_text = report.level.value.upper()
@@ -364,12 +538,181 @@ class KriegsspielApp:
             f"Margin: {report.margin}",
             "",
             f"Turn: {self.game.current_turn}",
-            "",
-            "Press R to restart   Q to quit",
         ]:
             text = self.small_font.render(line, True, themes.TEXT)
             self.screen.blit(text, text.get_rect(centerx=w // 2, y=y))
             y += lh
+
+        # K9: Replay / Quit buttons
+        btn_w, btn_h = 160, 34
+        replay_rect = pygame.Rect(w // 2 - btn_w - 10, y + 10, btn_w, btn_h)
+        quit_rect = pygame.Rect(w // 2 + 10, y + 10, btn_w, btn_h)
+        self._replay_button = replay_rect
+
+        pygame.draw.rect(self.screen, (50, 100, 80), replay_rect, border_radius=4)
+        pygame.draw.rect(self.screen, themes.SELECTION, replay_rect, 1, border_radius=4)
+        replay_txt = self.small_font.render("R - REPLAY", True, themes.SELECTION)
+        self.screen.blit(replay_txt, replay_txt.get_rect(center=replay_rect.center))
+
+        pygame.draw.rect(self.screen, (80, 50, 50), quit_rect, border_radius=4)
+        pygame.draw.rect(self.screen, themes.TEXT, quit_rect, 1, border_radius=4)
+        quit_txt = self.small_font.render("Q - QUIT", True, themes.TEXT)
+        self.screen.blit(quit_txt, quit_txt.get_rect(center=quit_rect.center))
+
+        # K4: Score graph
+        y += btn_h + 18
+        self._draw_score_graph(box, y)
+        y += 96  # graph height (80) + labels (14) + margin
+
+        # K3: Casualty table
+        self._draw_casualty_table(box, y)
+
+    def _draw_score_graph(self, box: pygame.Rect, start_y: int) -> None:
+        """K4: Line chart of blue/red scores over turns."""
+        history = self.game.score_history
+        if len(history) < 2:
+            return
+
+        graph_rect = pygame.Rect(box.x + 20, start_y, box.width - 40, 80)
+        pygame.draw.rect(self.screen, (20, 24, 32), graph_rect)
+        pygame.draw.rect(self.screen, themes.PANEL_BORDER, graph_rect, 1)
+
+        max_score = max((max(b, r) for b, r in history), default=1)
+        max_score = max(max_score, 1)
+        n = len(history)
+
+        def _x(i: int) -> int:
+            return graph_rect.x + int(i / (n - 1) * (graph_rect.width - 1))
+
+        def _y(score: int) -> int:
+            frac = score / max_score
+            return graph_rect.bottom - 2 - int(frac * (graph_rect.height - 4))
+
+        blue_pts = [(_x(i), _y(b)) for i, (b, _r) in enumerate(history)]
+        red_pts  = [(_x(i), _y(r)) for i, (_b, r) in enumerate(history)]
+
+        if len(blue_pts) >= 2:
+            pygame.draw.lines(self.screen, themes.BLUE_UNIT, False, blue_pts, 2)
+        if len(red_pts) >= 2:
+            pygame.draw.lines(self.screen, themes.RED_UNIT, False, red_pts, 2)
+
+        # Axis labels
+        t1 = self.small_font.render("T1", True, themes.MUTED_TEXT)
+        self.screen.blit(t1, (graph_rect.x, graph_rect.bottom + 2))
+        tn = self.small_font.render(f"T{n}", True, themes.MUTED_TEXT)
+        self.screen.blit(tn, (graph_rect.right - tn.get_width(), graph_rect.bottom + 2))
+        top_lbl = self.small_font.render(str(max_score), True, themes.MUTED_TEXT)
+        self.screen.blit(top_lbl, (graph_rect.x, graph_rect.y))
+
+    def _draw_casualty_table(self, box: pygame.Rect, start_y: int) -> None:
+        """K3: Render per-unit casualty table inside the game-over box."""
+        _STATUS_ORDER = {
+            MoraleState.BROKEN:  0,
+            MoraleState.ROUTING: 1,
+            MoraleState.SHAKEN:  2,
+            MoraleState.STEADY:  3,
+        }
+
+        def _unit_status(unit) -> str:
+            if unit.hit_points <= 0 or unit.is_removed:
+                return "Destroyed"
+            state = unit.morale_state
+            if state is MoraleState.ROUTING:
+                return "Routing"
+            if state is MoraleState.BROKEN:
+                return "Broken"
+            if state is MoraleState.SHAKEN:
+                return "Shaken"
+            return "Active"
+
+        def _sort_key(unit):
+            hp_frac = unit.hit_points / max(1, unit.max_hit_points)
+            state_order = _STATUS_ORDER.get(unit.morale_state, 3)
+            destroyed = 1 if (unit.hit_points <= 0 or unit.is_removed) else 0
+            return (-destroyed, state_order, hp_frac)
+
+        all_units = list(self.game.units.values())
+        blue_units = sorted([u for u in all_units if u.side is Side.BLUE], key=_sort_key)
+        red_units  = sorted([u for u in all_units if u.side is Side.RED],  key=_sort_key)
+
+        w = self.screen.get_width()
+        tbl_x = box.x + 10
+        tbl_w = box.width - 20
+        col_name_w = tbl_w * 35 // 100
+        col_shp_w  = tbl_w * 12 // 100
+        col_fhp_w  = tbl_w * 12 // 100
+        col_stat_w = tbl_w * 25 // 100
+
+        cols = [
+            ("UNIT", tbl_x + 4),
+            ("START", tbl_x + col_name_w + 4),
+            ("FINAL", tbl_x + col_name_w + col_shp_w + 4),
+            ("STATUS", tbl_x + col_name_w + col_shp_w + col_fhp_w + 4),
+        ]
+
+        ROW_H = 18
+        MAX_VISIBLE = 4  # rows per side in the box
+        y = start_y
+
+        for side_units, header_color, label in [
+            (blue_units, themes.BLUE_UNIT, "BLUE FORCES"),
+            (red_units,  themes.RED_UNIT,  "RED FORCES"),
+        ]:
+            if not side_units:
+                continue
+
+            # Section header
+            hdr_rect = pygame.Rect(tbl_x, y, tbl_w, ROW_H + 2)
+            pygame.draw.rect(self.screen, header_color, hdr_rect, border_radius=3)
+            hdr_surf = self.small_font.render(label, True, themes.TEXT)
+            self.screen.blit(hdr_surf, hdr_surf.get_rect(centerx=tbl_x + tbl_w // 2, y=y + 2))
+
+            # Column headers
+            y += ROW_H + 4
+            for col_label, cx in cols:
+                ch_surf = self.small_font.render(col_label, True, themes.MUTED_TEXT)
+                self.screen.blit(ch_surf, (cx, y))
+            y += ROW_H
+
+            # Rows (capped at MAX_VISIBLE with optional overflow note)
+            visible = side_units[:MAX_VISIBLE]
+            for i, unit in enumerate(visible):
+                row_rect = pygame.Rect(tbl_x, y, tbl_w, ROW_H)
+                row_bg = (36, 40, 54) if i % 2 == 0 else (28, 32, 44)
+                pygame.draw.rect(self.screen, row_bg, row_rect)
+
+                status = _unit_status(unit)
+                if status == "Destroyed":
+                    name_color = (120, 60, 60)
+                elif status == "Routing":
+                    name_color = (180, 130, 60)
+                else:
+                    name_color = themes.TEXT
+
+                name_surf = self.small_font.render(unit.name[:20], True, name_color)
+                self.screen.blit(name_surf, (tbl_x + 4, y + 2))
+
+                shp_surf = self.small_font.render(str(unit.max_hit_points), True, themes.MUTED_TEXT)
+                self.screen.blit(shp_surf, (tbl_x + col_name_w + 4, y + 2))
+
+                fhp = 0 if (unit.hit_points <= 0 or unit.is_removed) else unit.hit_points
+                fhp_color = (120, 60, 60) if fhp == 0 else themes.TEXT
+                fhp_surf = self.small_font.render(str(fhp), True, fhp_color)
+                self.screen.blit(fhp_surf, (tbl_x + col_name_w + col_shp_w + 4, y + 2))
+
+                stat_surf = self.small_font.render(status, True, name_color)
+                self.screen.blit(stat_surf, (tbl_x + col_name_w + col_shp_w + col_fhp_w + 4, y + 2))
+
+                y += ROW_H
+
+            if len(side_units) > MAX_VISIBLE:
+                more_surf = self.small_font.render(
+                    f"+{len(side_units) - MAX_VISIBLE} more", True, themes.MUTED_TEXT
+                )
+                self.screen.blit(more_surf, (tbl_x + tbl_w - 60, y))
+                y += ROW_H
+
+            y += 6  # gap between sections
 
     def _draw_help_overlay(self) -> None:
         w, h = self.screen.get_size()
@@ -453,6 +796,22 @@ class KriegsspielApp:
         # B3: movement path preview
         self._draw_move_path()
 
+        # H3: draw active animations
+        self.anim_manager.draw(self.screen, self.camera, self.small_font)
+        self.anim_manager.update()
+
+        # K2: log highlight hex (flashes for 2s after clicking a log entry)
+        if self._log_highlight_hex is not None:
+            elapsed = time.time() - self._log_highlight_time
+            if elapsed < 2.0:
+                alpha = int((1.0 - elapsed / 2.0) * 180)
+                hl_pos = self.camera.axial_to_screen(self._log_highlight_hex)
+                hl_surf = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
+                pygame.draw.circle(hl_surf, (255, 255, 100, alpha), hl_pos, 20, 3)
+                self.screen.blit(hl_surf, (0, 0))
+            else:
+                self._log_highlight_hex = None
+
         width, height = self.screen.get_size()
         top_bar_height = 28
         panel_top = top_bar_height + 12
@@ -478,6 +837,15 @@ class KriegsspielApp:
         if themes.COLORBLIND_MODE:
             cb_surf = self.small_font.render("CB", True, (230, 159, 0))
             self.screen.blit(cb_surf, (width - 30, 6))
+
+        # H7: speed indicator in top bar
+        if self.anim_manager.is_animating:
+            spd_label = ">>|"
+        else:
+            spd = self.anim_manager.speed_multiplier
+            spd_label = f"{int(spd)}x" if spd == int(spd) else f"{spd:.1f}x"
+        spd_surf = self.small_font.render(spd_label, True, themes.MUTED_TEXT)
+        self.screen.blit(spd_surf, (width - 60, 6))
 
         if self.tutorial is not None:
             step = self.tutorial.update(self.game)
@@ -521,11 +889,27 @@ class KriegsspielApp:
     def _tooltip_lines(self, visibility) -> list[str]:
         if self.hover_hex is None or not self.game.battle_map.in_bounds(self.hover_hex):
             return []
-        terrain = self.game.battle_map.terrain_at(self.hover_hex).value
+        terrain_type = self.game.battle_map.terrain_at(self.hover_hex)
+        terrain = terrain_type.value
         lines = [f"{self.hover_hex.q}, {self.hover_hex.r}", f"Terrain: {terrain}"]
         for unit in self.game.units_at(self.hover_hex):
             if unit.side is self.player_side or unit.id in visibility.visible_enemy_units:
                 lines.append(f"{unit.name} ({unit.hit_points} HP)")
+
+        # H9: damage estimate when friendly unit selected and hover over enemy in range
+        selected_unit = self.game.units.get(self.selected_unit_id) if self.selected_unit_id else None
+        if selected_unit and selected_unit.side is self.player_side:
+            hover_units = list(self.game.units_at(self.hover_hex))
+            enemy_unit = next((u for u in hover_units if u.side is not self.player_side and not u.is_removed), None)
+            if enemy_unit and self.hover_hex in self._attack_targets(selected_unit):
+                from core.combat import preview_combat
+                dist = selected_unit.position.distance_to(self.hover_hex) if selected_unit.position else 999
+                min_dmg, max_dmg, morale_risk = preview_combat(
+                    selected_unit, enemy_unit,
+                    distance_hexes=dist,
+                    defender_terrain=terrain_type,
+                )
+                lines.append(f"Est. {min_dmg}-{max_dmg} HP dmg | {morale_risk}")
         return lines
 
     def _movement_targets(self, unit) -> set[HexCoord]:

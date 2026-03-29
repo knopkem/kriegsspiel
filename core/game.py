@@ -11,7 +11,7 @@ from typing import Iterable
 from .combat import AttackKind, CombatResolver
 from .fog_of_war import FogOfWarEngine, VisibilitySnapshot
 from .map import HexCoord, HexGridMap, TerrainType
-from .messenger import MessengerSystem
+from .messenger import MessengerSystem, is_intercepted
 from .orders import Order, OrderBook, OrderType
 from .replay import ReplayRecorder
 from .scenario import Scenario
@@ -24,6 +24,7 @@ class GameEvent:
     turn: int
     category: str
     message: str
+    coord: "HexCoord | None" = None
 
 
 class VictoryLevel(StrEnum):
@@ -66,6 +67,7 @@ class GameState:
     replay: ReplayRecorder = field(default_factory=ReplayRecorder)
     reinforcements: list[ReinforcementWave] = field(default_factory=list)
     weather: WeatherState = field(default_factory=WeatherState)
+    score_history: list[tuple[int, int]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         rng = random.Random(self.rng_seed)
@@ -172,6 +174,10 @@ class GameState:
             scores=self._score_map(),
             events=(event.message for event in turn_events),
         )
+        self.score_history.append((
+            self.score_for_side(Side.BLUE),
+            self.score_for_side(Side.RED),
+        ))
         self.current_turn += 1
         return turn_events
 
@@ -257,9 +263,9 @@ class GameState:
                 unit.consecutive_hold_turns = 0
                 fatigue_cost = max(4, moved_hexes * (6 if order.order_type is OrderType.RETREAT else 5))
                 unit.add_fatigue(fatigue_cost)
-                events.append(GameEvent(self.current_turn, "movement", f"{unit.name} moves to {destination}."))
+                events.append(GameEvent(self.current_turn, "movement", f"{unit.name} moves to {destination}.", coord=destination))
             else:
-                events.append(GameEvent(self.current_turn, "movement", f"{unit.name} holds position; no path or movement budget."))
+                events.append(GameEvent(self.current_turn, "movement", f"{unit.name} holds position; no path or movement budget.", coord=unit.position))
             self.order_book.mark_resolved(order.order_id)
         return events
 
@@ -315,7 +321,7 @@ class GameState:
 
             distance = attacker.position.distance_to(defender.position)
             if distance > self.combat_resolver.max_range(attacker) and distance > 1:
-                events.append(GameEvent(self.current_turn, "combat", f"{attacker.name} cannot reach {defender.name}."))
+                events.append(GameEvent(self.current_turn, "combat", f"{attacker.name} cannot reach {defender.name}.", coord=attacker.position))
                 self.order_book.mark_resolved(order.order_id)
                 continue
 
@@ -335,7 +341,7 @@ class GameState:
                 artillery_effectiveness_modifier=self.weather.artillery_effectiveness_modifier,
             )
             self.order_book.mark_resolved(order.order_id)
-            events.append(GameEvent(self.current_turn, "combat", result.summary))
+            events.append(GameEvent(self.current_turn, "combat", result.summary, coord=defender.position))
 
             if (
                 result.attack_kind is AttackKind.MELEE
@@ -387,7 +393,8 @@ class GameState:
                         unit.degrade_morale(1)
                         processed.add(unit.id)
                         events.append(GameEvent(self.current_turn, "morale",
-                            f"{unit.name} shaken by nearby rout ({routing_unit.name})."))
+                            f"{unit.name} shaken by nearby rout ({routing_unit.name}).",
+                            coord=unit.position))
                         if unit.morale_state in (MoraleState.ROUTING, MoraleState.BROKEN):
                             next_queue.append(unit.id)
             queue = next_queue
@@ -456,16 +463,35 @@ class GameState:
         target_unit_id: str | None = None,
         formation=None,
         priority: int = 100,
-    ) -> "Order":
-        """Issue an order with messenger delay from nearest friendly commander."""
+    ) -> "Order | None":
+        """Issue an order with messenger delay from nearest friendly commander.
+
+        Returns the issued :class:`Order`, or ``None`` if the messenger was
+        intercepted by an enemy unit along the courier path.
+        """
         unit = self.units[unit_id]
         delay = 0
+        commander_pos: HexCoord | None = None
         if unit.position is not None:
             for cmd in self.units.values():
                 if cmd.unit_type is UnitType.COMMANDER and cmd.side is unit.side and not cmd.is_removed and cmd.position is not None:
                     if self.messenger_system is not None:
                         delay = self.messenger_system.delay_turns(cmd.position, unit.position)
+                    commander_pos = cmd.position
                     break
+
+        if commander_pos is not None and unit.position is not None:
+            path = commander_pos.line_to(unit.position)
+            enemy_units = [u for u in self.units.values() if u.side is not unit.side and not u.is_removed]
+            rng = random.Random(self.rng_seed ^ self.current_turn ^ hash(unit_id))
+            if is_intercepted(path, enemy_units, rng):
+                self.event_log.append(GameEvent(
+                    self.current_turn,
+                    "MessengerIntercepted",
+                    f"Messenger intercepted! Order to {unit.name} lost.",
+                ))
+                return None
+
         return self.order_book.issue(
             order_type,
             unit_id,
