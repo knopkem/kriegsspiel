@@ -64,7 +64,28 @@ class TutorialDirectorTestCase(unittest.TestCase):
         tutorial.current_index = 10
         self.assertTrue(tutorial.is_complete)
 
+    def test_final_step_update_does_not_require_is_over_attribute(self) -> None:
+        scenario = load_builtin_scenario("tutorial")
+        game = GameState.from_scenario(scenario, rng_seed=1)
+        tutorial = TutorialDirector()
+        tutorial.current_index = 9
+
+        tutorial.update(game)
+
+        self.assertEqual(tutorial.current_index, 9)
+
+    def test_final_step_advances_when_objective_is_occupied(self) -> None:
+        scenario = load_builtin_scenario("tutorial")
+        game = GameState.from_scenario(scenario, rng_seed=1)
+        tutorial = TutorialDirector()
+        tutorial.current_index = 9
+
+        objective = scenario.objectives[0]
+        game.units["blue-inf-1"].position = objective.position
+        tutorial.update(game)
+
+        self.assertGreaterEqual(tutorial.current_index, 10)
+
 
 if __name__ == "__main__":
     unittest.main()
-

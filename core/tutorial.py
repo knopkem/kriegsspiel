@@ -158,7 +158,13 @@ class TutorialDirector:
 
         elif idx == 9:
             # Advance once they've captured an objective or the game is over
-            if game.is_over or any(obj.held_by is not None for obj in game.objectives.values()):
+            objective_occupied = any(
+                any(not unit.is_removed for unit in game.units_at(obj.position))
+                for obj in game.objectives
+            )
+            report = game.victory_report()
+            decisive_outcome = report.level.value != "draw"
+            if decisive_outcome or objective_occupied:
                 self._mark_done(9)
 
         return self.current_step
@@ -166,4 +172,3 @@ class TutorialDirector:
     def _mark_done(self, step_idx: int) -> None:
         self._completed_steps.add(step_idx)
         self.current_index = step_idx + 1
-

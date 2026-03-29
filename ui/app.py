@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import heapq
 import math
 import time
 
@@ -118,6 +119,11 @@ class KriegsspielApp:
         # K2: log highlight hex + timestamp
         self._log_highlight_hex: HexCoord | None = None
         self._log_highlight_time: float = 0.0
+
+        self._selection_overlay_cache_key: tuple | None = None
+        self._cached_move_targets: set[HexCoord] = set()
+        self._cached_attack_targets: set[HexCoord] = set()
+        self._cached_attack_range_hexes: set[HexCoord] = set()
 
     def run(self) -> None:
         running = True
@@ -263,10 +269,14 @@ class KriegsspielApp:
 
         coord = self.camera.screen_to_axial(pos)
         if not self.game.battle_map.in_bounds(coord):
+            self._invalidate_selection_cache()
             self.selected_unit_id = None
             return
         unit = self._top_player_unit_at(coord)
-        self.selected_unit_id = unit.id if unit else None
+        new_selected_id = unit.id if unit else None
+        if new_selected_id != self.selected_unit_id:
+            self._invalidate_selection_cache()
+        self.selected_unit_id = new_selected_id
         if unit:
             self.audio.play("unit_select")
 
@@ -359,6 +369,21 @@ class KriegsspielApp:
                 return
             self._end_turn()
             return
+
+        pan_step = 25
+        if key in (pygame.K_LEFT, pygame.K_a):
+            self.camera.pan(pan_step, 0)
+            return
+        if key in (pygame.K_RIGHT, pygame.K_d):
+            self.camera.pan(-pan_step, 0)
+            return
+        if key in (pygame.K_UP, pygame.K_w):
+            self.camera.pan(0, pan_step)
+            return
+        if key in (pygame.K_DOWN, pygame.K_s):
+            self.camera.pan(0, -pan_step)
+            return
+
         if self.selected_unit_id is None:
             return
 
@@ -375,14 +400,6 @@ class KriegsspielApp:
             self.game.order_book.issue_rally(unit.id, current_turn=self.game.current_turn)
         elif key == pygame.K_c:
             themes.apply_colorblind_mode()
-        elif key == pygame.K_LEFT:
-            self.camera.pan(25, 0)
-        elif key == pygame.K_RIGHT:
-            self.camera.pan(-25, 0)
-        elif key == pygame.K_UP:
-            self.camera.pan(0, 25)
-        elif key == pygame.K_DOWN:
-            self.camera.pan(0, -25)
 
     def _end_turn(self) -> None:
         previous_positions = {uid: unit.position for uid, unit in self.game.units.items()}
@@ -504,6 +521,7 @@ class KriegsspielApp:
         self.move_path = []
         self.pending_move_dest = None
         self.anim_manager.skip_all()
+        self._invalidate_selection_cache()
 
     def _apply_text_scale(self) -> None:
         """L2: Recreate fonts and dependent HUD components after a scale change."""
@@ -822,7 +840,7 @@ class KriegsspielApp:
             ("F",           "Cycle formation"),
             ("H",           "Hold position"),
             ("R",           "Rally unit"),
-            ("Arrow keys",  "Pan camera"),
+            ("WASD / Arrows", "Pan camera"),
             ("Scroll wheel", "Zoom in/out"),
             ("Middle drag", "Pan camera"),
             ("Left click",  "Select unit"),
@@ -938,16 +956,22 @@ class KriegsspielApp:
 
         if self.tutorial is not None:
             step = self.tutorial.update(self.game)
-            tutorial_rect = pygame.Rect(250, panel_top, 520, 58)
+            tutorial_rect = pygame.Rect(250, panel_top, 620, 78)
             pygame.draw.rect(self.screen, themes.PANEL_BG, tutorial_rect, border_radius=4)
             pygame.draw.rect(self.screen, themes.PANEL_BORDER, tutorial_rect, 1, border_radius=4)
             title = self.small_font.render(step.title, True, themes.SELECTION)
-            body = self.small_font.render(step.message[:90], True, themes.TEXT)
             self.screen.blit(title, (tutorial_rect.x + 8, tutorial_rect.y + 6))
-            self.screen.blit(body, (tutorial_rect.x + 8, tutorial_rect.y + 24))
+            body_lines = self._wrap_bitmap_text(
+                step.message,
+                self.small_font,
+                tutorial_rect.width - 16,
+            )[:2]
+            for i, line in enumerate(body_lines):
+                body = self.small_font.render(line, True, themes.TEXT)
+                self.screen.blit(body, (tutorial_rect.x + 8, tutorial_rect.y + 24 + i * 14))
             # Progress bar
             bar_w = tutorial_rect.width - 16
-            bar_rect = pygame.Rect(tutorial_rect.x + 8, tutorial_rect.y + 44, bar_w, 6)
+            bar_rect = pygame.Rect(tutorial_rect.x + 8, tutorial_rect.bottom - 14, bar_w, 6)
             pygame.draw.rect(self.screen, themes.PANEL_BORDER, bar_rect, border_radius=3)
             fill_w = int(bar_w * self.tutorial.progress_fraction)
             if fill_w > 0:
@@ -1031,46 +1055,125 @@ class KriegsspielApp:
     def _movement_targets(self, unit) -> set[HexCoord]:
         if unit is None or unit.position is None:
             return set()
-        targets: set[HexCoord] = set()
-        budget = unit.turn_movement_budget()
-        costs = unit.movement_costs()
-        for coord in self.game.battle_map.coords():
-            path = self.game.battle_map.find_path(unit.position, coord, terrain_costs=costs)
-            if not path:
-                continue
-            spent = 0.0
-            for step in path[1:]:
-                spent += self.game.battle_map.movement_cost(step, costs) * 100
-            if spent <= budget:
-                targets.add(coord)
-        return targets
+        self._ensure_selection_overlay_cache(unit)
+        return self._cached_move_targets
 
     def _attack_targets(self, unit) -> set[HexCoord]:
         if unit is None or unit.position is None:
             return set()
-        attack_range = self.game.combat_resolver.max_range(unit)
-        if attack_range <= 0:
-            return set()
-        targets = set()
-        for enemy in self.game.units.values():
-            if enemy.side is unit.side or enemy.position is None or enemy.is_removed:
-                continue
-            if unit.position.distance_to(enemy.position) <= max(1, attack_range):
-                targets.add(enemy.position)
-        return targets
+        self._ensure_selection_overlay_cache(unit)
+        return self._cached_attack_targets
 
     def _attack_range_hexes(self, unit) -> set[HexCoord]:
         """B4: All in-bounds hexes within this unit's attack range (ring overlay)."""
         if unit is None or unit.position is None:
             return set()
+        self._ensure_selection_overlay_cache(unit)
+        return self._cached_attack_range_hexes
+
+    def _invalidate_selection_cache(self) -> None:
+        self._selection_overlay_cache_key = None
+        self._cached_move_targets = set()
+        self._cached_attack_targets = set()
+        self._cached_attack_range_hexes = set()
+
+    def _ensure_selection_overlay_cache(self, unit) -> None:
+        if unit is None or unit.position is None:
+            self._invalidate_selection_cache()
+            return
+        cache_key = (
+            unit.id,
+            self.game.current_turn,
+            unit.position.q,
+            unit.position.r,
+            unit.formation.value,
+            unit.fatigue,
+            unit.ammo,
+            unit.hit_points,
+            unit.morale_state.value,
+        )
+        if cache_key == self._selection_overlay_cache_key:
+            return
+        self._selection_overlay_cache_key = cache_key
+        self._cached_move_targets = self._compute_reachable_hexes(unit)
+        self._cached_attack_targets = self._compute_attack_targets(unit)
+        self._cached_attack_range_hexes = self._compute_attack_range_hexes(unit)
+
+    def _compute_reachable_hexes(self, unit) -> set[HexCoord]:
+        if unit.position is None:
+            return set()
+        costs = unit.movement_costs()
+        budget = unit.turn_movement_budget() / 100.0
+        best_cost: dict[HexCoord, float] = {unit.position: 0.0}
+        frontier: list[tuple[float, int, HexCoord]] = [(0.0, 0, unit.position)]
+        push_count = 1
+
+        while frontier:
+            spent, _, coord = heapq.heappop(frontier)
+            if spent > best_cost.get(coord, math.inf):
+                continue
+            for neighbor in self.game.battle_map.neighbors(coord):
+                step_cost = self.game.battle_map.movement_cost(neighbor, costs)
+                if math.isinf(step_cost):
+                    continue
+                new_cost = spent + step_cost
+                if new_cost > budget:
+                    continue
+                if new_cost >= best_cost.get(neighbor, math.inf):
+                    continue
+                best_cost[neighbor] = new_cost
+                heapq.heappush(frontier, (new_cost, push_count, neighbor))
+                push_count += 1
+
+        best_cost.pop(unit.position, None)
+        return set(best_cost)
+
+    def _compute_attack_targets(self, unit) -> set[HexCoord]:
+        if unit.position is None:
+            return set()
         attack_range = self.game.combat_resolver.max_range(unit)
         if attack_range <= 0:
             return set()
-        ring: set[HexCoord] = set()
-        for coord in self.game.battle_map.coords():
-            if unit.position.distance_to(coord) <= max(1, attack_range):
-                ring.add(coord)
-        return ring
+        return {
+            enemy.position
+            for enemy in self.game.units.values()
+            if enemy.side is not unit.side
+            and enemy.position is not None
+            and not enemy.is_removed
+            and unit.position.distance_to(enemy.position) <= max(1, attack_range)
+        }
+
+    def _compute_attack_range_hexes(self, unit) -> set[HexCoord]:
+        if unit.position is None:
+            return set()
+        attack_range = self.game.combat_resolver.max_range(unit)
+        if attack_range <= 0:
+            return set()
+        return {
+            coord
+            for coord in self.game.battle_map.coords()
+            if unit.position.distance_to(coord) <= max(1, attack_range)
+        }
+
+    def _wrap_bitmap_text(self, text: str, font: BitmapFont, max_width: int) -> list[str]:
+        char_width = max(1, (5 * font.scale) + font.scale)
+        max_chars = max(1, max_width // char_width)
+        words = text.split()
+        if not words:
+            return [""]
+
+        lines: list[str] = []
+        current: list[str] = []
+        for word in words:
+            candidate = " ".join(current + [word])
+            if len(candidate) > max_chars and current:
+                lines.append(" ".join(current))
+                current = [word]
+            else:
+                current.append(word)
+        if current:
+            lines.append(" ".join(current))
+        return lines
 
     def _top_player_unit_at(self, coord: HexCoord):
         for unit in self.game.units_at(coord):

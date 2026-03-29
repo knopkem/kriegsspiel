@@ -22,6 +22,7 @@ from ui.animation import (
     RangedFireAnimation,
     UnitMoveAnimation,
 )
+from ui.app import KriegsspielApp
 from ui.bitmap_font import BitmapFont
 from ui.combat_log import CombatLog
 
@@ -152,6 +153,31 @@ class ScoreHistoryTest(unittest.TestCase):
         self.assertEqual(game.score_history, [])
         game.advance_turn()
         self.assertEqual(len(game.score_history), 1)
+
+
+class AppKeyboardPanTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        pygame.init()
+        pygame.display.set_mode((1, 1))
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        pygame.quit()
+
+    def test_arrow_keys_pan_without_selection(self) -> None:
+        app = KriegsspielApp(scenario_name="tutorial", seed=1)
+        start = (app.camera.offset_x, app.camera.offset_y)
+        app.selected_unit_id = None
+        app._handle_keydown(pygame.K_LEFT)
+        self.assertNotEqual((app.camera.offset_x, app.camera.offset_y), start)
+
+    def test_wasd_pan_without_selection(self) -> None:
+        app = KriegsspielApp(scenario_name="tutorial", seed=1)
+        start = (app.camera.offset_x, app.camera.offset_y)
+        app.selected_unit_id = None
+        app._handle_keydown(pygame.K_w)
+        self.assertNotEqual((app.camera.offset_x, app.camera.offset_y), start)
 
 
 if __name__ == "__main__":
