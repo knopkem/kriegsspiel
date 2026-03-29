@@ -86,9 +86,12 @@ class OrderBook:
         target_unit_id: str | None = None,
         formation: Formation | None = None,
         notes: str = "",
+        replace_existing_from_turn: int | None = None,
     ) -> Order:
         if delay_turns < 0:
             raise ValueError("delay_turns must not be negative.")
+        if replace_existing_from_turn is not None:
+            self.cancel_future_orders_for_unit(unit_id, from_turn=replace_existing_from_turn)
 
         self._sequence += 1
         order = Order(
@@ -115,6 +118,7 @@ class OrderBook:
         delay_turns: int = 0,
         priority: int = 100,
         notes: str = "",
+        replace_existing_from_turn: int | None = None,
     ) -> Order:
         return self.issue(
             OrderType.MOVE,
@@ -124,6 +128,7 @@ class OrderBook:
             priority=priority,
             destination=destination,
             notes=notes,
+            replace_existing_from_turn=replace_existing_from_turn,
         )
 
     def issue_attack(
@@ -136,6 +141,7 @@ class OrderBook:
         priority: int = 100,
         destination: HexCoord | None = None,
         notes: str = "",
+        replace_existing_from_turn: int | None = None,
     ) -> Order:
         return self.issue(
             OrderType.ATTACK,
@@ -146,6 +152,7 @@ class OrderBook:
             destination=destination,
             target_unit_id=target_unit_id,
             notes=notes,
+            replace_existing_from_turn=replace_existing_from_turn,
         )
 
     def issue_change_formation(
@@ -157,6 +164,7 @@ class OrderBook:
         delay_turns: int = 0,
         priority: int = 100,
         notes: str = "",
+        replace_existing_from_turn: int | None = None,
     ) -> Order:
         return self.issue(
             OrderType.CHANGE_FORMATION,
@@ -166,6 +174,7 @@ class OrderBook:
             priority=priority,
             formation=formation,
             notes=notes,
+            replace_existing_from_turn=replace_existing_from_turn,
         )
 
     def issue_rally(
@@ -176,6 +185,7 @@ class OrderBook:
         delay_turns: int = 0,
         priority: int = 100,
         notes: str = "",
+        replace_existing_from_turn: int | None = None,
     ) -> Order:
         return self.issue(
             OrderType.RALLY,
@@ -184,6 +194,7 @@ class OrderBook:
             delay_turns=delay_turns,
             priority=priority,
             notes=notes,
+            replace_existing_from_turn=replace_existing_from_turn,
         )
 
     def issue_hold(
@@ -194,6 +205,7 @@ class OrderBook:
         delay_turns: int = 0,
         priority: int = 100,
         notes: str = "",
+        replace_existing_from_turn: int | None = None,
     ) -> Order:
         return self.issue(
             OrderType.HOLD,
@@ -202,6 +214,7 @@ class OrderBook:
             delay_turns=delay_turns,
             priority=priority,
             notes=notes,
+            replace_existing_from_turn=replace_existing_from_turn,
         )
 
     def issue_retreat(
@@ -213,6 +226,7 @@ class OrderBook:
         delay_turns: int = 0,
         priority: int = 100,
         notes: str = "",
+        replace_existing_from_turn: int | None = None,
     ) -> Order:
         return self.issue(
             OrderType.RETREAT,
@@ -222,6 +236,7 @@ class OrderBook:
             priority=priority,
             destination=destination,
             notes=notes,
+            replace_existing_from_turn=replace_existing_from_turn,
         )
 
     def issue_commander_ability(

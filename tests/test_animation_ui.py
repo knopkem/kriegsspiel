@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import time
 import unittest
+from core.orders import OrderStatus
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 
@@ -204,6 +205,26 @@ class AppKeyboardPanTest(unittest.TestCase):
         app.game.order_book.issue_move(unit.id, dest, current_turn=app.game.current_turn)
 
         app._draw_move_path()
+
+    def test_new_player_order_replaces_queued_move_continuation(self) -> None:
+        app = KriegsspielApp(scenario_name="tutorial", seed=1)
+        unit = app.game.units["blue-inf-1"]
+        app.selected_unit_id = unit.id
+        app.game.current_turn = 2
+        app.game.order_book.issue_move(
+            unit.id,
+            HexCoord(9, 9),
+            current_turn=1,
+            delay_turns=1,
+        )
+
+        app._execute_context_action("Hold", (0, 0))
+
+        queued = app.game.order_book.orders_for_unit(unit.id, include_cancelled=True)
+        continuation = next(order for order in queued if order.order_type.value == "move")
+        hold = next(order for order in queued if order.order_type.value == "hold")
+        self.assertEqual(continuation.status, OrderStatus.CANCELLED)
+        self.assertEqual(hold.status, OrderStatus.QUEUED)
 
     def test_restart_uses_initial_snapshot_for_campaign_game(self) -> None:
         game = GameState.from_scenario(load_builtin_scenario("tutorial"), rng_seed=1)

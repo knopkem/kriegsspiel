@@ -237,7 +237,7 @@ class KriegsspielApp:
             clicked_coord = self.camera.screen_to_axial(pos)
             if clicked_coord == self.pending_move_dest and self.selected_unit_id:
                 unit = self.game.units[self.selected_unit_id]
-                self.game.order_book.issue_move(unit.id, self.pending_move_dest, current_turn=self.game.current_turn)
+                self._issue_player_order("move", unit.id, destination=self.pending_move_dest)
                 self.audio.play("order_given")
                 self.pending_move_dest = None
                 self.move_path = []
@@ -317,23 +317,21 @@ class KriegsspielApp:
         unit = self.game.units[self.selected_unit_id]
         coord = self._context_target_coord
         if action == "Move Here" and coord:
-            self.game.order_book.issue_move(unit.id, coord, current_turn=self.game.current_turn)
+            self._issue_player_order("move", unit.id, destination=coord)
             self.audio.play("order_given")
             self.pending_move_dest = None
             self.move_path = []
         elif action == "Attack" and coord:
             enemy = self._top_enemy_unit_at(coord)
             if enemy:
-                self.game.order_book.issue_attack(unit.id, enemy.id, current_turn=self.game.current_turn)
+                self._issue_player_order("attack", unit.id, target_unit_id=enemy.id)
                 self.audio.play("order_given")
         elif action == "Hold":
-            self.game.order_book.issue_hold(unit.id, current_turn=self.game.current_turn)
+            self._issue_player_order("hold", unit.id)
         elif action == "Rally":
-            self.game.order_book.issue_rally(unit.id, current_turn=self.game.current_turn)
+            self._issue_player_order("rally", unit.id)
         elif action == "Formation":
-            self.game.order_book.issue_change_formation(
-                unit.id, cycle_formation(unit), current_turn=self.game.current_turn
-            )
+            self._issue_player_order("formation", unit.id, formation=cycle_formation(unit))
 
     def _handle_keydown(self, key: int) -> None:
         if key == pygame.K_F1 or key == pygame.K_SLASH:
@@ -370,7 +368,7 @@ class KriegsspielApp:
             if self.pending_move_dest is not None:
                 unit = self.game.units.get(self.selected_unit_id)
                 if unit:
-                    self.game.order_book.issue_move(unit.id, self.pending_move_dest, current_turn=self.game.current_turn)
+                    self._issue_player_order("move", unit.id, destination=self.pending_move_dest)
                     self.audio.play("order_given")
                 self.pending_move_dest = None
                 self.move_path = []
@@ -397,15 +395,11 @@ class KriegsspielApp:
 
         unit = self.game.units[self.selected_unit_id]
         if key == pygame.K_f:
-            self.game.order_book.issue_change_formation(
-                unit.id,
-                cycle_formation(unit),
-                current_turn=self.game.current_turn,
-            )
+            self._issue_player_order("formation", unit.id, formation=cycle_formation(unit))
         elif key == pygame.K_h:
-            self.game.order_book.issue_hold(unit.id, current_turn=self.game.current_turn)
+            self._issue_player_order("hold", unit.id)
         elif key == pygame.K_r:
-            self.game.order_book.issue_rally(unit.id, current_turn=self.game.current_turn)
+            self._issue_player_order("rally", unit.id)
         elif key == pygame.K_c:
             themes.apply_colorblind_mode()
 
@@ -543,6 +537,32 @@ class KriegsspielApp:
         self.unit_renderer = UnitRenderer(self.small_font)
         self.hud = HUD(self.font, self.small_font)
         self.tooltip = Tooltip(self.small_font)
+
+    def _issue_player_order(
+        self,
+        order_kind: str,
+        unit_id: str,
+        *,
+        destination: HexCoord | None = None,
+        target_unit_id: str | None = None,
+        formation=None,
+    ) -> None:
+        kwargs = {
+            "current_turn": self.game.current_turn,
+            "replace_existing_from_turn": self.game.current_turn,
+        }
+        if order_kind == "move":
+            self.game.order_book.issue_move(unit_id, destination, **kwargs)
+        elif order_kind == "attack":
+            self.game.order_book.issue_attack(unit_id, target_unit_id, **kwargs)
+        elif order_kind == "hold":
+            self.game.order_book.issue_hold(unit_id, **kwargs)
+        elif order_kind == "rally":
+            self.game.order_book.issue_rally(unit_id, **kwargs)
+        elif order_kind == "formation":
+            self.game.order_book.issue_change_formation(unit_id, formation, **kwargs)
+        else:
+            raise ValueError(f"Unsupported order kind: {order_kind}")
 
     def _draw_move_path(self) -> None:
         for order in self.game.order_book.all_orders():
@@ -1143,7 +1163,7 @@ class KriegsspielApp:
         if unit.position is None:
             return set()
         costs = unit.movement_costs()
-        budget = unit.turn_movement_budget() / 100.0
+        budget = unit.turn_movement_budget() / self.game.battle_map.hex_size_meters
         best_cost: dict[HexCoord, float] = {unit.position: 0.0}
         frontier: list[tuple[float, int, HexCoord]] = [(0.0, 0, unit.position)]
         push_count = 1

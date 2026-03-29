@@ -266,6 +266,17 @@ class GameState:
                 fatigue_cost = max(4, moved_hexes * (6 if order.order_type is OrderType.RETREAT else 5))
                 unit.add_fatigue(fatigue_cost)
                 events.append(GameEvent(self.current_turn, "movement", f"{unit.name} moves to {destination}.", coord=destination))
+                if destination != order.destination:
+                    self.order_book.issue(
+                        order.order_type,
+                        unit.id,
+                        current_turn=self.current_turn,
+                        delay_turns=1,
+                        priority=order.priority,
+                        destination=order.destination,
+                        notes=order.notes,
+                        replace_existing_from_turn=self.current_turn + 1,
+                    )
             else:
                 events.append(GameEvent(self.current_turn, "movement", f"{unit.name} holds position; no path or movement budget.", coord=unit.position))
             self.order_book.mark_resolved(order.order_id)
@@ -509,13 +520,13 @@ class GameState:
         if not path:
             return unit.position
 
-        budget = unit.turn_movement_budget()
+        budget = unit.turn_movement_budget() / self.battle_map.hex_size_meters
         spent = 0.0
         current = path[0]
         terrain_costs = unit.movement_costs()
 
         for step in path[1:]:
-            step_cost = self.battle_map.movement_cost(step, terrain_costs) * 100
+            step_cost = self.battle_map.movement_cost(step, terrain_costs)
             if spent + step_cost > budget:
                 break
 

@@ -77,6 +77,7 @@ class SimpleAICommander:
             )
 
         for unit in active_units:
+            game.order_book.cancel_future_orders_for_unit(unit.id, from_turn=game.current_turn)
             if unit.unit_type is UnitType.COMMANDER:
                 continue
 
@@ -248,4 +249,3 @@ class SimpleAICommander:
             return game.order_book.issue_move(unit.id, destination, current_turn=game.current_turn, priority=50)
 
         return game.order_book.issue_hold(unit.id, current_turn=game.current_turn, priority=60)
-
