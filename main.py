@@ -81,13 +81,15 @@ def run_main_menu() -> None:
             game_state=game_state,
             campaign_mode=campaign_mode,
         )
-        app.run()
+        window_closed = app.run()
+        if window_closed:
+            return app, True
         screen, font, small_font = _build_ui()
         _refresh_widgets()
-        return app
+        return app, False
 
     def _launch_pending(difficulty: str) -> None:
-        nonlocal state, pending_launch, campaign_ui
+        nonlocal state, pending_launch, campaign_ui, running
         if pending_launch is None:
             state = "menu"
             return
@@ -95,11 +97,14 @@ def run_main_menu() -> None:
         pending_launch = None
         mode = launch["kind"]
         if mode == "scenario":
-            _run_game(
+            _app, window_closed = _run_game(
                 scenario_name=launch["scenario"],
                 seed=launch.get("seed", 1),
                 difficulty=difficulty,
             )
+            if window_closed:
+                running = False
+                return
             state = "menu"
             return
         if mode == "quick_battle":
@@ -110,12 +115,15 @@ def run_main_menu() -> None:
                 seed=launch.get("seed", 42),
             )
             gs = generate_skirmish(cfg, rng_seed=launch.get("seed", 42))
-            _run_game(
+            _app, window_closed = _run_game(
                 scenario_name="skirmish_small",
                 seed=launch.get("seed", 42),
                 difficulty=difficulty,
                 game_state=gs,
             )
+            if window_closed:
+                running = False
+                return
             state = "menu"
             return
         if mode == "campaign":
@@ -128,13 +136,16 @@ def run_main_menu() -> None:
             from core.game import GameState
             campaign_game = GameState.from_scenario(scenario, rng_seed=launch.get("seed", 1))
             active_campaign_state.apply_carry_over(campaign_game.units)
-            game = _run_game(
+            game, window_closed = _run_game(
                 scenario_name=current.scenario_id,
                 seed=launch.get("seed", 1),
                 difficulty=difficulty,
                 game_state=campaign_game,
                 campaign_mode=True,
             )
+            if window_closed:
+                running = False
+                return
             campaign_ui.state = active_campaign_state
             winner = game.victory_report.winner if game.victory_report is not None else None
             campaign_ui.state.record_result(

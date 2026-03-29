@@ -166,19 +166,30 @@ class AppKeyboardPanTest(unittest.TestCase):
     def tearDownClass(cls) -> None:
         pygame.quit()
 
-    def test_arrow_keys_pan_without_selection(self) -> None:
+    def test_arrow_keys_pan_continuously_without_selection(self) -> None:
         app = KriegsspielApp(scenario_name="tutorial", seed=1)
         start = (app.camera.offset_x, app.camera.offset_y)
         app.selected_unit_id = None
-        app._handle_keydown(pygame.K_LEFT)
-        self.assertNotEqual((app.camera.offset_x, app.camera.offset_y), start)
+        app._apply_continuous_pan(dt_seconds=0.1, pressed={pygame.K_LEFT: True})
+        self.assertEqual(app.camera.offset_x - start[0], 48)
 
-    def test_wasd_pan_without_selection(self) -> None:
+    def test_wasd_pan_continuously_without_selection(self) -> None:
         app = KriegsspielApp(scenario_name="tutorial", seed=1)
         start = (app.camera.offset_x, app.camera.offset_y)
         app.selected_unit_id = None
-        app._handle_keydown(pygame.K_w)
-        self.assertNotEqual((app.camera.offset_x, app.camera.offset_y), start)
+        app._apply_continuous_pan(dt_seconds=0.1, pressed={pygame.K_w: True})
+        self.assertEqual(app.camera.offset_y - start[1], 48)
+
+    def test_minimap_drag_updates_camera_without_second_click(self) -> None:
+        app = KriegsspielApp(scenario_name="tutorial", seed=1)
+        minimap_rect = app._minimap_rect()
+
+        app._handle_left_click(minimap_rect.center)
+        first = (app.camera.offset_x, app.camera.offset_y)
+        app._minimap_dragging = True
+        app._pan_to_minimap_pos((minimap_rect.right - 2, minimap_rect.bottom - 2))
+
+        self.assertNotEqual((app.camera.offset_x, app.camera.offset_y), first)
 
     def test_move_here_queues_order_immediately(self) -> None:
         app = KriegsspielApp(scenario_name="tutorial", seed=1)
@@ -250,6 +261,18 @@ class AppKeyboardPanTest(unittest.TestCase):
         app._handle_left_click(app._continue_button.center)
 
         self.assertTrue(app.quit_requested)
+
+
+class AppRunLoopTest(unittest.TestCase):
+    def test_run_returns_true_when_window_is_closed(self) -> None:
+        pygame.init()
+        pygame.display.set_mode((1, 1))
+        app = KriegsspielApp(scenario_name="tutorial", seed=1)
+        pygame.event.post(pygame.event.Event(pygame.QUIT))
+
+        closed = app.run()
+
+        self.assertTrue(closed)
 
 
 if __name__ == "__main__":

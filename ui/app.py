@@ -79,6 +79,7 @@ class KriegsspielApp:
         self.selected_unit_id: str | None = None
         self.hover_hex: HexCoord | None = None
         self.dragging = False
+        self._minimap_dragging = False
         self.last_mouse = (0, 0)
         self.end_turn_button = pygame.Rect(0, 0, 0, 0)
 
@@ -93,6 +94,7 @@ class KriegsspielApp:
         # B11: pause menu
         self.paused: bool = False
         self.quit_requested: bool = False
+        self.window_close_requested: bool = False
 
         # B12: end-game summary
         self.game_over: bool = False
@@ -129,11 +131,13 @@ class KriegsspielApp:
         self._cached_attack_targets: set[HexCoord] = set()
         self._cached_attack_range_hexes: set[HexCoord] = set()
 
-    def run(self) -> None:
+    def run(self) -> bool:
         running = True
         while running:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    self.window_close_requested = True
+                    self.quit_requested = True
                     running = False
                 elif event.type == pygame.MOUSEMOTION:
                     self.hover_hex = self.camera.screen_to_axial(event.pos)
@@ -142,6 +146,8 @@ class KriegsspielApp:
                         dx = event.pos[0] - self.last_mouse[0]
                         dy = event.pos[1] - self.last_mouse[1]
                         self.camera.pan(dx, dy)
+                    elif self._minimap_dragging:
+                        self._pan_to_minimap_pos(event.pos)
                     self.last_mouse = event.pos
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     self.last_mouse = event.pos
@@ -149,6 +155,8 @@ class KriegsspielApp:
                         self.dragging = True
                     elif event.button == 1:
                         if not self.anim_manager.is_animating:
+                            if self._minimap_rect().collidepoint(event.pos):
+                                self._minimap_dragging = True
                             self._handle_left_click(event.pos)
                     elif event.button == 3:
                         if not self.anim_manager.is_animating:
@@ -171,8 +179,11 @@ class KriegsspielApp:
                             self.hud.combat_log.scroll(-1)
                         else:
                             self.camera.zoom_at(0.9, event.pos)
-                elif event.type == pygame.MOUSEBUTTONUP and event.button == 2:
-                    self.dragging = False
+                elif event.type == pygame.MOUSEBUTTONUP:
+                    if event.button == 2:
+                        self.dragging = False
+                    elif event.button == 1:
+                        self._minimap_dragging = False
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         if self.pending_move_dest is not None:
@@ -195,11 +206,13 @@ class KriegsspielApp:
             if self._fonts_dirty:
                 self._apply_text_scale()
 
+            self._apply_continuous_pan()
             self._draw()
             pygame.display.flip()
             self.clock.tick(themes.FPS)
 
         pygame.quit()
+        return self.window_close_requested
 
     def _handle_left_click(self, pos: tuple[int, int]) -> None:
         # L2: text scale button in pause menu
@@ -260,14 +273,7 @@ class KriegsspielApp:
                 self._log_highlight_time = time.time()
             return
 
-        minimap_rect = pygame.Rect(10, self.screen.get_height() - 140, 160, 110)
-        mini_coord = self.hud.minimap.click_to_coord(self.game, minimap_rect, pos)
-        if mini_coord is not None:
-            screen_pos = self.camera.axial_to_screen(HexCoord(*mini_coord))
-            self.camera.pan(
-                (self.screen.get_width() // 2) - screen_pos[0],
-                (self.screen.get_height() // 2) - screen_pos[1],
-            )
+        if self._pan_to_minimap_pos(pos):
             return
 
         if self.end_turn_button.collidepoint(pos):
@@ -376,18 +382,7 @@ class KriegsspielApp:
             self._end_turn()
             return
 
-        pan_step = 25
-        if key in (pygame.K_LEFT, pygame.K_a):
-            self.camera.pan(pan_step, 0)
-            return
-        if key in (pygame.K_RIGHT, pygame.K_d):
-            self.camera.pan(-pan_step, 0)
-            return
-        if key in (pygame.K_UP, pygame.K_w):
-            self.camera.pan(0, pan_step)
-            return
-        if key in (pygame.K_DOWN, pygame.K_s):
-            self.camera.pan(0, -pan_step)
+        if key in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d, pygame.K_UP, pygame.K_w, pygame.K_DOWN, pygame.K_s):
             return
 
         if self.selected_unit_id is None:
@@ -537,6 +532,54 @@ class KriegsspielApp:
         self.unit_renderer = UnitRenderer(self.small_font)
         self.hud = HUD(self.font, self.small_font)
         self.tooltip = Tooltip(self.small_font)
+
+    def _apply_continuous_pan(
+        self,
+        *,
+        dt_seconds: float | None = None,
+        pressed=None,
+    ) -> None:
+        if self.paused or self.game_over:
+            return
+        if pressed is None:
+            pressed = pygame.key.get_pressed()
+        if dt_seconds is None:
+            dt_seconds = max(1 / themes.FPS, self.clock.get_time() / 1000.0)
+
+        def _pressed(key: int) -> bool:
+            if hasattr(pressed, "get"):
+                return bool(pressed.get(key, False))
+            return bool(pressed[key])
+
+        x_dir = 0
+        y_dir = 0
+        if _pressed(pygame.K_LEFT) or _pressed(pygame.K_a):
+            x_dir += 1
+        if _pressed(pygame.K_RIGHT) or _pressed(pygame.K_d):
+            x_dir -= 1
+        if _pressed(pygame.K_UP) or _pressed(pygame.K_w):
+            y_dir += 1
+        if _pressed(pygame.K_DOWN) or _pressed(pygame.K_s):
+            y_dir -= 1
+        if x_dir == 0 and y_dir == 0:
+            return
+
+        pan_step = max(1, int(round(480 * dt_seconds)))
+        self.camera.pan(x_dir * pan_step, y_dir * pan_step)
+
+    def _minimap_rect(self) -> pygame.Rect:
+        return pygame.Rect(10, self.screen.get_height() - 140, 160, 110)
+
+    def _pan_to_minimap_pos(self, pos: tuple[int, int]) -> bool:
+        mini_coord = self.hud.minimap.click_to_coord(self.game, self._minimap_rect(), pos)
+        if mini_coord is None:
+            return False
+        screen_pos = self.camera.axial_to_screen(HexCoord(*mini_coord))
+        self.camera.pan(
+            (self.screen.get_width() // 2) - screen_pos[0],
+            (self.screen.get_height() // 2) - screen_pos[1],
+        )
+        return True
 
     def _issue_player_order(
         self,
