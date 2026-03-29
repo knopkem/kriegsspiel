@@ -71,7 +71,7 @@ def run_main_menu() -> None:
         scenario_select = ScenarioSelect(font, small_font)
         campaign_ui = CampaignUI(font, small_font)
 
-    def _run_game(*, scenario_name: str, seed: int, difficulty: str, game_state=None):
+    def _run_game(*, scenario_name: str, seed: int, difficulty: str, game_state=None, campaign_mode: bool = False):
         nonlocal screen, font, small_font
         pygame.quit()
         app = KriegsspielApp(
@@ -79,6 +79,7 @@ def run_main_menu() -> None:
             seed=seed,
             difficulty=difficulty,
             game_state=game_state,
+            campaign_mode=campaign_mode,
         )
         app.run()
         screen, font, small_font = _build_ui()
@@ -118,20 +119,23 @@ def run_main_menu() -> None:
             state = "menu"
             return
         if mode == "campaign":
-            current = campaign_ui.state.current_scenario
+            active_campaign_state = campaign_ui.state
+            current = active_campaign_state.current_scenario
             if current is None:
                 state = "campaign"
                 return
             scenario = load_builtin_scenario(current.scenario_id)
             from core.game import GameState
             campaign_game = GameState.from_scenario(scenario, rng_seed=launch.get("seed", 1))
-            campaign_ui.state.apply_carry_over(campaign_game.units)
+            active_campaign_state.apply_carry_over(campaign_game.units)
             game = _run_game(
                 scenario_name=current.scenario_id,
                 seed=launch.get("seed", 1),
                 difficulty=difficulty,
                 game_state=campaign_game,
+                campaign_mode=True,
             )
+            campaign_ui.state = active_campaign_state
             winner = game.victory_report.winner if game.victory_report is not None else None
             campaign_ui.state.record_result(
                 current.scenario_id,
@@ -191,7 +195,7 @@ def run_main_menu() -> None:
                     state = "menu"
                 elif isinstance(result, dict):
                     pending_launch = {"kind": "quick_battle", **result, "seed": 42}
-                    state = "difficulty"
+                    _launch_pending(result["difficulty"])
 
             elif state == "scenario_select":
                 result = scenario_select.handle_event(event)

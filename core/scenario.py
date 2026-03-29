@@ -41,6 +41,7 @@ class Scenario:
     objectives: tuple[ScenarioObjective, ...]
     starting_turn: int = 1
     reinforcements: tuple[dict, ...] = ()
+    max_turns: int | None = None
 
     def build_map(self) -> HexGridMap:
         return HexGridMap.from_terrain_rows(self.map_rows)
@@ -87,9 +88,9 @@ def load_scenario(path: Path) -> Scenario:
         ),
         starting_turn=raw.get("starting_turn", 1),
         reinforcements=tuple(raw.get("reinforcements", [])),
+        max_turns=raw.get("max_turns"),
     )
 
 
 def load_builtin_scenario(name: str) -> Scenario:
     return load_scenario(DATA_DIR / f"{name}.json")
-

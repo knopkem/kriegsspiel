@@ -64,6 +64,11 @@ class GameStateTestCase(unittest.TestCase):
 
         self.assertGreaterEqual(score, 5)
 
+    def test_from_scenario_copies_turn_limit(self) -> None:
+        scenario = load_builtin_scenario("assault_on_hill")
+        game = GameState.from_scenario(scenario, rng_seed=1)
+        self.assertEqual(game.max_turns, 16)
+
 
 if __name__ == "__main__":
     unittest.main()

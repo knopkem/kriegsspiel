@@ -68,6 +68,7 @@ class GameState:
     reinforcements: list[ReinforcementWave] = field(default_factory=list)
     weather: WeatherState = field(default_factory=WeatherState)
     score_history: list[tuple[int, int]] = field(default_factory=list)
+    max_turns: int | None = None
 
     def __post_init__(self) -> None:
         rng = random.Random(self.rng_seed)
@@ -130,6 +131,7 @@ class GameState:
             rng_seed=rng_seed,
             objectives=scenario.objectives,
             reinforcements=waves,
+            max_turns=scenario.max_turns,
         )
 
     def advance_turn(self) -> list[GameEvent]:

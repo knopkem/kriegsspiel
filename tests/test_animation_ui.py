@@ -179,6 +179,57 @@ class AppKeyboardPanTest(unittest.TestCase):
         app._handle_keydown(pygame.K_w)
         self.assertNotEqual((app.camera.offset_x, app.camera.offset_y), start)
 
+    def test_move_here_queues_order_immediately(self) -> None:
+        app = KriegsspielApp(scenario_name="tutorial", seed=1)
+        app.selected_unit_id = "blue-inf-1"
+        unit = app.game.units[app.selected_unit_id]
+        app._context_target_coord = next(
+            coord for coord in unit.position.neighbors() if app.game.battle_map.in_bounds(coord)
+        )
+
+        app._execute_context_action("Move Here", (0, 0))
+
+        queued = [
+            order for order in app.game.order_book.all_orders()
+            if order.unit_id == unit.id and order.order_type.value == "move"
+        ]
+        self.assertEqual(len(queued), 1)
+        self.assertIsNone(app.pending_move_dest)
+
+    def test_draw_move_path_renders_queued_order_paths(self) -> None:
+        app = KriegsspielApp(scenario_name="tutorial", seed=1)
+        unit = app.game.units["blue-inf-1"]
+        dest = next(coord for coord in unit.position.neighbors() if app.game.battle_map.in_bounds(coord))
+        app.selected_unit_id = unit.id
+        app.game.order_book.issue_move(unit.id, dest, current_turn=app.game.current_turn)
+
+        app._draw_move_path()
+
+    def test_restart_uses_initial_snapshot_for_campaign_game(self) -> None:
+        game = GameState.from_scenario(load_builtin_scenario("tutorial"), rng_seed=1)
+        app = KriegsspielApp(
+            scenario_name="tutorial",
+            seed=1,
+            game_state=game,
+            campaign_mode=True,
+        )
+        original = app.game.units["blue-inf-1"].position
+        app.game.units["blue-inf-1"].position = HexCoord(9, 9)
+
+        app._restart()
+
+        self.assertEqual(app.game.units["blue-inf-1"].position, original)
+
+    def test_campaign_continue_button_click_sets_quit_requested(self) -> None:
+        app = KriegsspielApp(scenario_name="tutorial", seed=1, campaign_mode=True)
+        app.game_over = True
+        app.victory_report = app.game.victory_report()
+        app._draw_game_over()
+
+        app._handle_left_click(app._continue_button.center)
+
+        self.assertTrue(app.quit_requested)
+
 
 if __name__ == "__main__":
     unittest.main()

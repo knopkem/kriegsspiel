@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import copy
 import heapq
 import math
 import time
@@ -17,7 +18,7 @@ from ai.opponent import SimpleAICommander
 from core.fog_of_war import VisibilitySnapshot
 from core.game import GameState
 from core.map import HexCoord
-from core.orders import OrderStatus
+from core.orders import OrderStatus, OrderType
 from core.scenario import load_builtin_scenario
 from core.tutorial import TutorialDirector
 from core.units import MoraleState, Side, UnitType
@@ -45,7 +46,7 @@ from .unit_renderer import UnitRenderer
 
 class KriegsspielApp:
     def __init__(self, *, scenario_name: str = "skirmish_small", seed: int = 1,
-                 difficulty: str = "medium", game_state=None) -> None:
+                 difficulty: str = "medium", game_state=None, campaign_mode: bool = False) -> None:
         pygame.init()
         self.screen = pygame.display.set_mode(themes.WINDOW_SIZE)
         pygame.display.set_caption("Kriegsspiel Prototype")
@@ -63,7 +64,9 @@ class KriegsspielApp:
         else:
             self.scenario = load_builtin_scenario(scenario_name)
             self.game = GameState.from_scenario(self.scenario, rng_seed=seed)
+        self._initial_game_state = copy.deepcopy(self.game)
         self.player_side = Side.BLUE
+        self.campaign_mode = campaign_mode
         self.ai = SimpleAICommander(Side.RED, difficulty=AIDifficulty(difficulty), seed=seed + 100)
         self.tutorial = TutorialDirector() if scenario_name == "tutorial" else None
 
@@ -95,6 +98,7 @@ class KriegsspielApp:
         self.game_over: bool = False
         self.victory_report = None
         self._replay_button = pygame.Rect(0, 0, 0, 0)
+        self._continue_button = pygame.Rect(0, 0, 0, 0)
 
         # B13: toasts
         self.toasts = ToastManager()
@@ -224,6 +228,9 @@ class KriegsspielApp:
         if self.game_over and self._replay_button.collidepoint(pos):
             self._restart()
             return
+        if self.game_over and self._continue_button.collidepoint(pos):
+            self.quit_requested = True
+            return
 
         # H8: confirm pending move on left-click of the same hex
         if self.pending_move_dest is not None:
@@ -310,11 +317,10 @@ class KriegsspielApp:
         unit = self.game.units[self.selected_unit_id]
         coord = self._context_target_coord
         if action == "Move Here" and coord:
-            # H8: Enter preview mode instead of immediately issuing
-            self.pending_move_dest = coord
-            self.move_path = (
-                self.game.battle_map.find_path(unit.position, coord, terrain_costs=unit.movement_costs()) or []
-            )
+            self.game.order_book.issue_move(unit.id, coord, current_turn=self.game.current_turn)
+            self.audio.play("order_given")
+            self.pending_move_dest = None
+            self.move_path = []
         elif action == "Attack" and coord:
             enemy = self._top_enemy_unit_at(coord)
             if enemy:
@@ -353,6 +359,8 @@ class KriegsspielApp:
         if self.game_over:
             if key == pygame.K_r:
                 self._restart()
+            elif self.campaign_mode and key in (pygame.K_c, pygame.K_RETURN):
+                self.quit_requested = True
             elif key == pygame.K_q:
                 self.quit_requested = True
             return
@@ -490,7 +498,16 @@ class KriegsspielApp:
         self.audio.play("turn_end")
 
         report = self.game.victory_report()
-        if report.level.value != "draw" or not self._has_combat_units():
+        blue_alive = any(
+            unit.side is Side.BLUE and unit.unit_type is not UnitType.COMMANDER and not unit.is_removed
+            for unit in self.game.units.values()
+        )
+        red_alive = any(
+            unit.side is Side.RED and unit.unit_type is not UnitType.COMMANDER and not unit.is_removed
+            for unit in self.game.units.values()
+        )
+        turn_limit_reached = self.game.max_turns is not None and self.game.current_turn > self.game.max_turns
+        if turn_limit_reached or not blue_alive or not red_alive:
             self.game_over = True
             self.victory_report = report
             side = getattr(report, "winner", None)
@@ -509,12 +526,7 @@ class KriegsspielApp:
         )
 
     def _restart(self) -> None:
-        if self.scenario is not None:
-            self.game = GameState.from_scenario(self.scenario, rng_seed=self._initial_seed)
-        else:
-            from core.scenario_generator import generate_skirmish, SkirmishConfig
-            cfg = SkirmishConfig(size="medium", seed=self._initial_seed)
-            self.game = generate_skirmish(cfg, rng_seed=self._initial_seed)
+        self.game = copy.deepcopy(self._initial_game_state)
         self.game_over = False
         self.victory_report = None
         self.selected_unit_id = None
@@ -533,10 +545,39 @@ class KriegsspielApp:
         self.tooltip = Tooltip(self.small_font)
 
     def _draw_move_path(self) -> None:
+        for order in self.game.order_book.all_orders():
+            if order.status is not OrderStatus.QUEUED or order.order_type not in {OrderType.MOVE, OrderType.RETREAT}:
+                continue
+            unit = self.game.units.get(order.unit_id)
+            if unit is None or unit.side is not self.player_side or unit.position is None or order.destination is None:
+                continue
+            path = self.game.battle_map.find_path(
+                unit.position,
+                order.destination,
+                terrain_costs=unit.movement_costs(),
+            ) or [unit.position, order.destination]
+            self._draw_path(
+                path,
+                colour=themes.SELECTION if unit.id == self.selected_unit_id else (120, 180, 255),
+                show_costs=(unit.id == self.selected_unit_id),
+            )
+
         if not self.move_path or len(self.move_path) < 2:
             return
-        points = [self.camera.axial_to_screen(h) for h in self.move_path]
-        # Draw dashed yellow line
+        self._draw_path(self.move_path, colour=themes.SELECTION, show_costs=True)
+
+        # Ghost unit at destination (semi-transparent circle)
+        if self.pending_move_dest is not None:
+            dest_screen = self.camera.axial_to_screen(self.pending_move_dest)
+            ghost_surf = pygame.Surface((30, 30), pygame.SRCALPHA)
+            pygame.draw.circle(ghost_surf, (255, 220, 90, 128), (15, 15), 12)
+            pygame.draw.circle(ghost_surf, (255, 220, 90, 180), (15, 15), 12, 2)
+            self.screen.blit(ghost_surf, (dest_screen[0] - 15, dest_screen[1] - 15))
+
+    def _draw_path(self, path: list[HexCoord], *, colour: tuple[int, int, int], show_costs: bool) -> None:
+        if len(path) < 2:
+            return
+        points = [self.camera.axial_to_screen(h) for h in path]
         dash_len = 8
         gap_len = 4
         for i in range(len(points) - 1):
@@ -556,27 +597,19 @@ class KriegsspielApp:
                 if drawing:
                     start_pt = (int(p1[0] + nx * pos), int(p1[1] + ny * pos))
                     end_pt = (int(p1[0] + nx * end_pos), int(p1[1] + ny * end_pos))
-                    pygame.draw.line(self.screen, themes.SELECTION, start_pt, end_pt, 2)
+                    pygame.draw.line(self.screen, colour, start_pt, end_pt, 2)
                 pos = end_pos
                 drawing = not drawing
 
         selected = self.game.units.get(self.selected_unit_id) if self.selected_unit_id else None
-        if selected is not None:
+        if show_costs and selected is not None:
             spent = 0.0
             costs = selected.movement_costs()
-            for step in self.move_path[1:]:
+            for step in path[1:]:
                 spent += self.game.battle_map.movement_cost(step, costs)
                 sx, sy = self.camera.axial_to_screen(step)
-                label = self.small_font.render(f"{spent:.1f}", True, themes.SELECTION)
+                label = self.small_font.render(f"{spent:.1f}", True, colour)
                 self.screen.blit(label, label.get_rect(center=(sx, sy - 14)))
-
-        # Ghost unit at destination (semi-transparent circle)
-        if self.pending_move_dest is not None:
-            dest_screen = self.camera.axial_to_screen(self.pending_move_dest)
-            ghost_surf = pygame.Surface((30, 30), pygame.SRCALPHA)
-            pygame.draw.circle(ghost_surf, (255, 220, 90, 128), (15, 15), 12)
-            pygame.draw.circle(ghost_surf, (255, 220, 90, 180), (15, 15), 12, 2)
-            self.screen.blit(ghost_surf, (dest_screen[0] - 15, dest_screen[1] - 15))
 
     def _draw_pause_overlay(self) -> None:
         w, h = self.screen.get_size()
@@ -648,21 +681,23 @@ class KriegsspielApp:
             self.screen.blit(text, text.get_rect(centerx=w // 2, y=y))
             y += lh
 
-        # K9: Replay / Quit buttons
+        # K9: Replay / Continue-or-Quit buttons
         btn_w, btn_h = 160, 34
         replay_rect = pygame.Rect(w // 2 - btn_w - 10, y + 10, btn_w, btn_h)
-        quit_rect = pygame.Rect(w // 2 + 10, y + 10, btn_w, btn_h)
+        continue_rect = pygame.Rect(w // 2 + 10, y + 10, btn_w, btn_h)
         self._replay_button = replay_rect
+        self._continue_button = continue_rect
 
         pygame.draw.rect(self.screen, (50, 100, 80), replay_rect, border_radius=4)
         pygame.draw.rect(self.screen, themes.SELECTION, replay_rect, 1, border_radius=4)
         replay_txt = self.small_font.render("R - REPLAY", True, themes.SELECTION)
         self.screen.blit(replay_txt, replay_txt.get_rect(center=replay_rect.center))
 
-        pygame.draw.rect(self.screen, (80, 50, 50), quit_rect, border_radius=4)
-        pygame.draw.rect(self.screen, themes.TEXT, quit_rect, 1, border_radius=4)
-        quit_txt = self.small_font.render("Q - QUIT", True, themes.TEXT)
-        self.screen.blit(quit_txt, quit_txt.get_rect(center=quit_rect.center))
+        pygame.draw.rect(self.screen, (80, 50, 50), continue_rect, border_radius=4)
+        pygame.draw.rect(self.screen, themes.TEXT, continue_rect, 1, border_radius=4)
+        continue_label = "C - CONTINUE" if self.campaign_mode else "Q - QUIT"
+        continue_txt = self.small_font.render(continue_label, True, themes.TEXT)
+        self.screen.blit(continue_txt, continue_txt.get_rect(center=continue_rect.center))
 
         # K4: Score graph
         y += btn_h + 18
@@ -935,7 +970,12 @@ class KriegsspielApp:
         top_bar = pygame.Rect(0, 0, width, top_bar_height)
         pygame.draw.rect(self.screen, themes.PANEL_BG, top_bar)
         turn_text = self.font.render(
-            f"Turn {self.game.current_turn}  Blue {self.game.score_for_side(Side.BLUE)} - Red {self.game.score_for_side(Side.RED)}",
+            (
+                f"Turn {self.game.current_turn}/{self.game.max_turns}  "
+                if self.game.max_turns is not None
+                else f"Turn {self.game.current_turn}  "
+            )
+            + f"Blue {self.game.score_for_side(Side.BLUE)} - Red {self.game.score_for_side(Side.RED)}",
             True,
             themes.TEXT,
         )

@@ -78,13 +78,12 @@ class CombatLog:
         pygame.draw.rect(surface, themes.PANEL_BG, rect)
         pygame.draw.rect(surface, themes.PANEL_BORDER, rect, 1)
 
-        filter_label = self._filter.upper()
-        title = font.render(f"Event Log [{filter_label}]", True, themes.TEXT)
+        title = font.render("Event Log", True, themes.TEXT)
         surface.blit(title, (rect.x + 8, rect.y + 5))
 
         self._filter_rects = []
-        fx = rect.x + 138
-        fy = rect.y + 4
+        fx = rect.x + 8
+        fy = rect.y + 22
         for name in _FILTERS:
             label = name.upper()
             pill_w = max(42, len(label) * 6 + 12)
@@ -104,12 +103,13 @@ class CombatLog:
 
         filtered = [e for e in event_log if self._matches_filter(e)]
         total = len(filtered)
-        self.scroll_offset = min(self.scroll_offset, max(0, total - self.max_visible))
-        start = max(0, total - self.max_visible - self.scroll_offset)
-        visible_events = filtered[start: start + self.max_visible]
+        visible_rows = max(1, (rect.height - 46) // 18)
+        self.scroll_offset = min(self.scroll_offset, max(0, total - visible_rows))
+        start = max(0, total - visible_rows - self.scroll_offset)
+        visible_events = filtered[start: start + visible_rows]
 
         line_h = 18
-        y = rect.y + 24
+        y = rect.y + 44
         self._entry_rects = []
         for event in visible_events:
             colour = _CATEGORY_COLOURS.get(event.category, themes.TEXT)
@@ -122,17 +122,13 @@ class CombatLog:
             coord = getattr(event, "coord", None)
             self._entry_rects.append((entry_rect, coord))
             if coord is not None:
-                pygame.draw.line(
-                    surface, themes.MUTED_TEXT,
-                    (rect.x + 6, y + line_h - 2),
-                    (rect.x + 6 + min(len(msg) * 6, rect.width - 12), y + line_h - 2),
-                    1,
-                )
+                marker = font.render(">", True, themes.MUTED_TEXT)
+                surface.blit(marker, (rect.right - 14, y + 1))
             y += line_h
 
-        if total > self.max_visible:
+        if total > visible_rows:
             hint = font.render(f"^ scroll ({self.scroll_offset})", True, themes.MUTED_TEXT)
             surface.blit(hint, (rect.right - 80, rect.y + 5))
 
-        tab_hint = font.render("Tab:filter", True, themes.MUTED_TEXT)
-        surface.blit(tab_hint, (rect.x + 8, rect.bottom - 12))
+        tab_hint = font.render("Tab = filter", True, themes.MUTED_TEXT)
+        surface.blit(tab_hint, (rect.right - 86, rect.bottom - 14))

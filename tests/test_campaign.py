@@ -125,6 +125,39 @@ class TestCampaignProgress(unittest.TestCase):
         self.assertIn("Drill Day", summary)
         self.assertIn("Decisive Engagement", summary)
 
+    def test_record_result_uses_matching_scenario_even_if_state_is_overfull(self):
+        campaign = [CampaignScenario("a", "A", ""), CampaignScenario("b", "B", "")]
+        state = CampaignState(
+            campaign=campaign,
+            results=[
+                BattleResult("a", Side.BLUE, 3, 1, 0),
+                BattleResult("b", Side.BLUE, 3, 1, 0),
+            ],
+        )
+
+        state.record_result("b", winner=Side.BLUE, turns_taken=4, surviving_units=[_fake_unit("b1", Side.BLUE)])
+
+        self.assertIn("b1", state.unit_hp_carry)
+
+    def test_load_truncates_results_to_campaign_length(self):
+        campaign = [CampaignScenario("a", "A", ""), CampaignScenario("b", "B", "")]
+        payload = {
+            "results": [
+                {"scenario_id": "a", "winner": "blue", "turns_taken": 1, "blue_units_surviving": 1, "red_units_surviving": 0},
+                {"scenario_id": "b", "winner": "blue", "turns_taken": 1, "blue_units_surviving": 1, "red_units_surviving": 0},
+                {"scenario_id": "c", "winner": "red", "turns_taken": 1, "blue_units_surviving": 0, "red_units_surviving": 1},
+            ],
+            "unit_hp_carry": {},
+        }
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            path = f.name
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+
+        loaded = CampaignState.load(path, campaign)
+
+        self.assertEqual(len(loaded.results), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

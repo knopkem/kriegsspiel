@@ -26,6 +26,10 @@ class ScenarioLoaderTestCase(unittest.TestCase):
                 self.assertTrue(scenario.objectives)
                 self.assertTrue(any(unit.unit_type is UnitType.ARTILLERY for unit in units.values()) or scenario_name == "tutorial")
 
+    def test_assault_on_hill_has_turn_limit(self) -> None:
+        scenario = load_builtin_scenario("assault_on_hill")
+        self.assertEqual(scenario.max_turns, 16)
+
 
 if __name__ == "__main__":
     unittest.main()

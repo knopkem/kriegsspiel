@@ -163,5 +163,6 @@
     }
   ],
   "starting_turn": 1,
+  "max_turns": 16,
   "difficulty_stars": 3
 }

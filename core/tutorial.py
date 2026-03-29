@@ -32,7 +32,7 @@ def _default_steps() -> list[TutorialStep]:
         # Step 0 — selection & movement
         TutorialStep(
             "1 / 10 — Select & Move",
-            "Click one of your units (blue), then RIGHT-CLICK a nearby hex to queue a Move order. Press ENTER to end the turn.",
+            "Click one of your units (blue), then RIGHT-CLICK a nearby hex and choose MOVE HERE to queue a Move order. Press ENTER to end the turn.",
         ),
         # Step 1 — terrain awareness
         TutorialStep(

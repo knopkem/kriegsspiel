@@ -134,10 +134,14 @@ class CampaignState:
 
         # Store carry-over HP ratios for surviving player (BLUE) units
         carry = {}
-        current = self.campaign[len(self.results) - 1]
+        current = next(
+            (scenario for scenario in self.campaign if scenario.scenario_id == scenario_id),
+            None,
+        )
+        carry_fraction = current.hp_carry_fraction if current is not None else 1.0
         for u in blues:
             if u.max_hit_points > 0:
-                ratio = (u.hit_points / u.max_hit_points) * current.hp_carry_fraction
+                ratio = (u.hit_points / u.max_hit_points) * carry_fraction
                 carry[u.id] = max(0.1, ratio)   # keep at least 10% HP
         self.unit_hp_carry = carry
 
@@ -181,6 +185,7 @@ class CampaignState:
             )
             for r in data.get("results", [])
         ]
+        results = results[:len(campaign)]
         return cls(
             campaign=campaign,
             results=results,

@@ -97,6 +97,7 @@ def generate_skirmish(config: SkirmishConfig | None = None, *, rng_seed: int = 1
         rng_seed=rng_seed,
         current_turn=1,
         reinforcements=[],
+        max_turns=config.max_turns,
     )
 
 
