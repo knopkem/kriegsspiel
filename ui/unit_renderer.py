@@ -101,22 +101,44 @@ class UnitRenderer:
         visibility: VisibilitySnapshot,
         *,
         selected_unit_id: str | None = None,
+        animated_centers: dict[str, tuple[int, int]] | None = None,
     ) -> None:
+        animated_centers = animated_centers or {}
         for unit in game.units.values():
             if unit.position is None or unit.is_removed:
                 continue
             if unit.side is player_side:
-                self._draw_counter(surface, camera, unit, selected=(unit.id == selected_unit_id))
+                self._draw_counter(
+                    surface,
+                    camera,
+                    unit,
+                    selected=(unit.id == selected_unit_id),
+                    center_override=animated_centers.get(unit.id),
+                )
             elif unit.id in visibility.visible_enemy_units:
-                self._draw_counter(surface, camera, unit, selected=(unit.id == selected_unit_id))
+                self._draw_counter(
+                    surface,
+                    camera,
+                    unit,
+                    selected=(unit.id == selected_unit_id),
+                    center_override=animated_centers.get(unit.id),
+                )
 
         for ghost in visibility.last_known_enemies.values():
             if ghost.unit_id in visibility.visible_enemy_units:
                 continue
             self._draw_ghost(surface, camera, ghost)
 
-    def _draw_counter(self, surface: pygame.Surface, camera: Camera, unit: Unit, *, selected: bool) -> None:
-        center = camera.axial_to_screen(unit.position)
+    def _draw_counter(
+        self,
+        surface: pygame.Surface,
+        camera: Camera,
+        unit: Unit,
+        *,
+        selected: bool,
+        center_override: tuple[int, int] | None = None,
+    ) -> None:
+        center = center_override if center_override is not None else camera.axial_to_screen(unit.position)
         hex_size = camera.hex_size
 
         if camera.zoom < 0.8:
@@ -223,4 +245,3 @@ class UnitRenderer:
         surface.blit(label, label.get_rect(center=rect.center))
         turn_text = self.font.render(f"T{ghost.seen_on_turn}", True, (160, 160, 160))
         surface.blit(turn_text, (rect.x + 2, rect.bottom - turn_text.get_height() - 1))
-

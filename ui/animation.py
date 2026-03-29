@@ -53,6 +53,13 @@ class CascadeRingAnimation(Animation):
     max_radius: float = 60.0
 
 
+@dataclass
+class UnitMoveAnimation(Animation):
+    unit_id: str = ""
+    from_pos: tuple = (0, 0)
+    to_pos: tuple = (0, 0)
+
+
 class AnimationManager:
     def __init__(self, speed_multiplier: float = 1.0):
         self._animations: list[Animation] = []
@@ -83,6 +90,8 @@ class AnimationManager:
     def draw(self, surface: pygame.Surface, camera, font) -> None:
         """Draw all active animations."""
         for anim in self._animations:
+            if isinstance(anim, UnitMoveAnimation):
+                continue
             if isinstance(anim, RangedFireAnimation):
                 self._draw_ranged(surface, anim)
             elif isinstance(anim, MeleeAnimation):
@@ -91,6 +100,20 @@ class AnimationManager:
                 self._draw_damage_number(surface, anim, font)
             elif isinstance(anim, CascadeRingAnimation):
                 self._draw_cascade_ring(surface, anim)
+
+    def animated_unit_centers(self) -> dict[str, tuple[int, int]]:
+        centers: dict[str, tuple[int, int]] = {}
+        for anim in self._animations:
+            if not isinstance(anim, UnitMoveAnimation):
+                continue
+            progress = anim.progress
+            sx, sy = anim.from_pos
+            tx, ty = anim.to_pos
+            centers[anim.unit_id] = (
+                int(sx + (tx - sx) * progress),
+                int(sy + (ty - sy) * progress),
+            )
+        return centers
 
     def _draw_ranged(self, surface: pygame.Surface, anim: RangedFireAnimation) -> None:
         alpha = 1.0 - anim.progress

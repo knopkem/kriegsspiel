@@ -58,6 +58,7 @@ class QuickBattle:
         self._size_idx = 1          # Medium default
         self._force_idx = 2         # Balanced default
         self._diff_idx = 1          # Medium default
+        self._focus_idx = 0
         self._start_rect = pygame.Rect(0, 0, 0, 0)
         self._back_rect = pygame.Rect(0, 0, 0, 0)
         self._arrow_rects: list[tuple[pygame.Rect, str, int]] = []  # (rect, axis, delta)
@@ -73,13 +74,13 @@ class QuickBattle:
             if event.key == pygame.K_RETURN:
                 return self._build_config()
             if event.key == pygame.K_LEFT:
-                self._cycle("focus", -1)
+                self._cycle(self._focused_axis(), -1)
             elif event.key == pygame.K_RIGHT:
-                self._cycle("focus", 1)
+                self._cycle(self._focused_axis(), 1)
             elif event.key == pygame.K_UP:
-                self._cycle("focus", -1)
+                self._focus_idx = (self._focus_idx - 1) % 3
             elif event.key == pygame.K_DOWN:
-                self._cycle("focus", 1)
+                self._focus_idx = (self._focus_idx + 1) % 3
 
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             pos = event.pos
@@ -125,7 +126,8 @@ class QuickBattle:
             # Row background
             row_rect = pygame.Rect(center_x - 280, ry - 10, 560, self._ROW_H + 50)
             pygame.draw.rect(surface, (30, 34, 44), row_rect, border_radius=6)
-            pygame.draw.rect(surface, themes.PANEL_BORDER, row_rect, 1, border_radius=6)
+            border = themes.SELECTION if row_i == self._focus_idx else themes.PANEL_BORDER
+            pygame.draw.rect(surface, border, row_rect, 1, border_radius=6)
 
             # Row label
             lbl_surf = self.small_font.render(label, True, themes.MUTED_TEXT)
@@ -220,3 +222,6 @@ class QuickBattle:
             "force":      _FORCE_TYPES[self._force_idx][1],
             "difficulty": _DIFFICULTIES[self._diff_idx][1],
         }
+
+    def _focused_axis(self) -> str:
+        return ("size", "force", "diff")[self._focus_idx]

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import math
 import time
+
+os.environ.setdefault("SDL_VIDEO_HIGHDPI_DISABLED", "1")
 
 import pygame
 
@@ -19,7 +22,14 @@ from core.tutorial import TutorialDirector
 from core.units import MoraleState, Side, UnitType
 
 from . import themes
-from .animation import AnimationManager, RangedFireAnimation, MeleeAnimation, DamageNumberAnimation, CascadeRingAnimation
+from .animation import (
+    AnimationManager,
+    CascadeRingAnimation,
+    DamageNumberAnimation,
+    MeleeAnimation,
+    RangedFireAnimation,
+    UnitMoveAnimation,
+)
 from .audio import AudioEngine
 from .bitmap_font import BitmapFont
 from .camera import Camera
@@ -56,7 +66,7 @@ class KriegsspielApp:
         self.ai = SimpleAICommander(Side.RED, difficulty=AIDifficulty(difficulty), seed=seed + 100)
         self.tutorial = TutorialDirector() if scenario_name == "tutorial" else None
 
-        self.camera = Camera(*themes.WINDOW_SIZE, zoom=1.0, offset_x=200, offset_y=80)
+        self.camera = Camera(*themes.WINDOW_SIZE, zoom=0.9, offset_x=180, offset_y=70)
         self.map_renderer = MapRenderer()
         self.unit_renderer = UnitRenderer(self.small_font)
         self.hud = HUD(self.font, self.small_font)
@@ -103,6 +113,7 @@ class KriegsspielApp:
 
         # Animation framework (H1-H7)
         self.anim_manager = AnimationManager()
+        self._anim_button_rects: dict[str, pygame.Rect] = {}
 
         # K2: log highlight hex + timestamp
         self._log_highlight_hex: HexCoord | None = None
@@ -189,6 +200,14 @@ class KriegsspielApp:
                 self._fonts_dirty = True
             return
 
+        for name, rect in self._anim_button_rects.items():
+            if rect.collidepoint(pos):
+                if name == "skip":
+                    self.anim_manager.skip_all()
+                else:
+                    self.anim_manager.set_speed(float(name))
+                return
+
         if self.context_menu.visible:
             selected = self.context_menu.click(pos)
             if selected is not None:
@@ -219,6 +238,8 @@ class KriegsspielApp:
         # K2: click on combat log to pan to event location
         log_rect = pygame.Rect(180, self.screen.get_height() - 150, self.screen.get_width() - 190, 140)
         if log_rect.collidepoint(pos):
+            if self.hud.combat_log.click_filter(pos):
+                return
             coord = self.hud.combat_log.coord_for_click(pos)
             if coord is not None:
                 self.camera.center_on(coord)
@@ -364,6 +385,9 @@ class KriegsspielApp:
             self.camera.pan(0, -25)
 
     def _end_turn(self) -> None:
+        previous_positions = {uid: unit.position for uid, unit in self.game.units.items()}
+        previous_hp = {uid: unit.hit_points for uid, unit in self.game.units.items()}
+        previous_morale = {uid: unit.morale_state for uid, unit in self.game.units.items()}
         self.ai.issue_orders(self.game)
         turn_events = self.game.advance_turn()
 
@@ -381,7 +405,19 @@ class KriegsspielApp:
             # H2-H6: create animations for turn events
             if event.coord is not None:
                 screen_pos = self.camera.axial_to_screen(event.coord)
-                if event.category == "combat":
+                if event.category == "combat" and "fires on" in event.message:
+                    attacker_name = event.message.split(" fires on ", 1)[0]
+                    attacker = next((u for u in self.game.units.values() if u.name == attacker_name), None)
+                    if attacker is not None and attacker.position is not None:
+                        self.anim_manager.add(
+                            RangedFireAnimation(
+                                duration=0.2,
+                                from_pos=self.camera.axial_to_screen(attacker.position),
+                                to_pos=screen_pos,
+                                is_artillery=attacker.unit_type is UnitType.ARTILLERY,
+                            )
+                        )
+                elif event.category == "combat":
                     self.anim_manager.add(MeleeAnimation(duration=0.6, hex_pos=screen_pos))
                 elif event.category == "morale":
                     self.anim_manager.add(CascadeRingAnimation(duration=0.7, hex_pos=screen_pos))
@@ -389,6 +425,46 @@ class KriegsspielApp:
             # K10: minimap pulse for combat events
             if event.category == "combat" and event.coord is not None:
                 self.hud.minimap.add_pulse(event.coord)
+
+        for unit_id, before in previous_positions.items():
+            after = self.game.units.get(unit_id)
+            if after is None or before is None or after.position is None or before == after.position:
+                continue
+            distance = max(1, before.distance_to(after.position))
+            self.anim_manager.add(
+                UnitMoveAnimation(
+                    duration=0.3 * distance,
+                    unit_id=unit_id,
+                    from_pos=self.camera.axial_to_screen(before),
+                    to_pos=self.camera.axial_to_screen(after.position),
+                )
+            )
+
+        for unit in self.game.units.values():
+            if unit.position is None:
+                continue
+            old_hp = previous_hp.get(unit.id, unit.hit_points)
+            old_morale = previous_morale.get(unit.id, unit.morale_state)
+            hp_loss = max(0, old_hp - unit.hit_points)
+            pos = self.camera.axial_to_screen(unit.position)
+            if hp_loss > 0:
+                self.anim_manager.add(
+                    DamageNumberAnimation(
+                        duration=1.0,
+                        pos=(pos[0] + 8, pos[1] - 8),
+                        text=f"-{hp_loss} HP",
+                        colour=(220, 80, 80),
+                    )
+                )
+            if old_morale != unit.morale_state:
+                self.anim_manager.add(
+                    DamageNumberAnimation(
+                        duration=1.0,
+                        pos=(pos[0] - 10, pos[1] - 24),
+                        text=unit.morale_state.value.upper(),
+                        colour=(90, 160, 240),
+                    )
+                )
 
         if routing_this_turn:
             self.audio.play("routing")
@@ -427,6 +503,7 @@ class KriegsspielApp:
         self.selected_unit_id = None
         self.move_path = []
         self.pending_move_dest = None
+        self.anim_manager.skip_all()
 
     def _apply_text_scale(self) -> None:
         """L2: Recreate fonts and dependent HUD components after a scale change."""
@@ -464,6 +541,16 @@ class KriegsspielApp:
                     pygame.draw.line(self.screen, themes.SELECTION, start_pt, end_pt, 2)
                 pos = end_pos
                 drawing = not drawing
+
+        selected = self.game.units.get(self.selected_unit_id) if self.selected_unit_id else None
+        if selected is not None:
+            spent = 0.0
+            costs = selected.movement_costs()
+            for step in self.move_path[1:]:
+                spent += self.game.battle_map.movement_cost(step, costs)
+                sx, sy = self.camera.axial_to_screen(step)
+                label = self.small_font.render(f"{spent:.1f}", True, themes.SELECTION)
+                self.screen.blit(label, label.get_rect(center=(sx, sy - 14)))
 
         # Ghost unit at destination (semi-transparent circle)
         if self.pending_move_dest is not None:
@@ -791,6 +878,7 @@ class KriegsspielApp:
             self.player_side,
             visibility,
             selected_unit_id=self.selected_unit_id,
+            animated_centers=self.anim_manager.animated_unit_centers(),
         )
 
         # B3: movement path preview
@@ -813,17 +901,18 @@ class KriegsspielApp:
                 self._log_highlight_hex = None
 
         width, height = self.screen.get_size()
-        top_bar_height = 28
+        top_bar_height = 24
         panel_top = top_bar_height + 12
-        detail_rect = pygame.Rect(10, panel_top, 220, 265)
-        order_rect = pygame.Rect(width - 230, panel_top, 220, 220)
-        log_rect = pygame.Rect(180, height - 150, width - 190, 140)
-        minimap_rect = pygame.Rect(10, height - 140, 160, 110)
+        detail_rect = pygame.Rect(10, panel_top, 200, 232)
+        order_rect = pygame.Rect(width - 210, panel_top, 200, 190)
+        log_rect = pygame.Rect(168, height - 132, width - 178, 122)
+        minimap_rect = pygame.Rect(10, height - 132, 148, 100)
 
         self.hud.unit_detail.draw(self.screen, detail_rect, selected_unit, self.font, self.small_font)
         self.end_turn_button = self.hud.order_panel.draw(self.screen, order_rect, self.game, self.player_side)
         self.hud.combat_log.draw(self.screen, log_rect, self.game.event_log, self.small_font)
         self.hud.minimap.draw(self.screen, self.game, minimap_rect, camera=self.camera, visibility=visibility)
+        self._draw_animation_controls(width, height)
 
         top_bar = pygame.Rect(0, 0, width, top_bar_height)
         pygame.draw.rect(self.screen, themes.PANEL_BG, top_bar)
@@ -885,6 +974,33 @@ class KriegsspielApp:
         # B14: help overlay
         if self.show_help:
             self._draw_help_overlay()
+
+    def _draw_animation_controls(self, width: int, height: int) -> None:
+        labels = [("1", "1x"), ("2", "2x"), ("4", "4x"), ("skip", "Skip")]
+        self._anim_button_rects = {}
+        btn_w = 48
+        btn_h = 22
+        gap = 6
+        total_w = len(labels) * btn_w + (len(labels) - 1) * gap
+        x = width - total_w - 12
+        y = height - 158
+        for key, label in labels:
+            rect = pygame.Rect(x, y, btn_w, btn_h)
+            self._anim_button_rects[key] = rect
+            active = (
+                key != "skip"
+                and self.anim_manager.speed_multiplier == float(key)
+            )
+            pygame.draw.rect(
+                self.screen,
+                (60, 80, 120) if active else (42, 47, 60),
+                rect,
+                border_radius=4,
+            )
+            pygame.draw.rect(self.screen, themes.PANEL_BORDER, rect, 1, border_radius=4)
+            txt = self.small_font.render(label, True, themes.SELECTION if active else themes.TEXT)
+            self.screen.blit(txt, txt.get_rect(center=rect.center))
+            x += btn_w + gap
 
     def _tooltip_lines(self, visibility) -> list[str]:
         if self.hover_hex is None or not self.game.battle_map.in_bounds(self.hover_hex):

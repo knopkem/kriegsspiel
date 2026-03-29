@@ -42,11 +42,11 @@ class ScenarioReinforcementsTest(unittest.TestCase):
         """Units from a wave appear on the map exactly on the specified turn."""
         game = self._game("ligny_1815")
         initial_unit_count = len(game.units)
-        # Advance to turn 5 (before blue wave at turn 6)
-        for _ in range(4):
+        # Reinforcements for turn 6 are processed during the advance from turn 6 to 7.
+        for _ in range(5):
             game.advance_turn()
         self.assertEqual(len(game.units), initial_unit_count)
-        # Advance to turn 6 — blue reinforcements should arrive
+        # One more turn resolves turn-6 reinforcements.
         game.advance_turn()
         self.assertGreater(len(game.units), initial_unit_count)
 

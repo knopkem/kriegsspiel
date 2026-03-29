@@ -36,6 +36,7 @@ class CombatLog:
     _entry_rects: list[tuple[pygame.Rect, HexCoord | None]] = field(
         default_factory=list, init=False, repr=False
     )
+    _filter_rects: list[tuple[pygame.Rect, str]] = field(default_factory=list, init=False, repr=False)
 
     def scroll(self, delta: int) -> None:
         self.scroll_offset = max(0, self.scroll_offset + delta)
@@ -59,6 +60,14 @@ class CombatLog:
                 return coord
         return None
 
+    def click_filter(self, pos: tuple[int, int]) -> bool:
+        for rect, name in self._filter_rects:
+            if rect.collidepoint(pos):
+                self._filter = name
+                self.scroll_offset = 0
+                return True
+        return False
+
     def draw(
         self,
         surface: pygame.Surface,
@@ -72,6 +81,26 @@ class CombatLog:
         filter_label = self._filter.upper()
         title = font.render(f"Event Log [{filter_label}]", True, themes.TEXT)
         surface.blit(title, (rect.x + 8, rect.y + 5))
+
+        self._filter_rects = []
+        fx = rect.x + 138
+        fy = rect.y + 4
+        for name in _FILTERS:
+            label = name.upper()
+            pill_w = max(42, len(label) * 6 + 12)
+            pill = pygame.Rect(fx, fy, pill_w, 16)
+            active = name == self._filter
+            pygame.draw.rect(
+                surface,
+                (60, 80, 120) if active else (46, 52, 66),
+                pill,
+                border_radius=4,
+            )
+            pygame.draw.rect(surface, themes.PANEL_BORDER, pill, 1, border_radius=4)
+            txt = font.render(label, True, themes.SELECTION if active else themes.MUTED_TEXT)
+            surface.blit(txt, txt.get_rect(center=pill.center))
+            self._filter_rects.append((pill, name))
+            fx += pill_w + 6
 
         filtered = [e for e in event_log if self._matches_filter(e)]
         total = len(filtered)
@@ -107,4 +136,3 @@ class CombatLog:
 
         tab_hint = font.render("Tab:filter", True, themes.MUTED_TEXT)
         surface.blit(tab_hint, (rect.x + 8, rect.bottom - 12))
-
