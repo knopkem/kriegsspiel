@@ -251,6 +251,26 @@
         22
       ],
       "command_radius": 9
+    },
+    {
+      "id": "blue_wagon1",
+      "name": "Blue Supply Wagon",
+      "type": "supply_wagon",
+      "side": "blue",
+      "position": [
+        2,
+        40
+      ]
+    },
+    {
+      "id": "red_wagon1",
+      "name": "Red Supply Wagon",
+      "type": "supply_wagon",
+      "side": "red",
+      "position": [
+        56,
+        40
+      ]
     }
   ],
   "objectives": [
@@ -318,5 +338,6 @@
       "points": 2
     }
   ],
-  "starting_turn": 1
+  "starting_turn": 1,
+  "difficulty_stars": 5
 }

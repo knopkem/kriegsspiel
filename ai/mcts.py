@@ -4,7 +4,10 @@ from __future__ import annotations
 import copy
 import math
 import random
+import time
 from dataclasses import dataclass, field
+
+TIME_BUDGET_SECONDS = 1.0
 
 from core.game import GameState
 from core.units import Side, UnitType
@@ -76,8 +79,11 @@ class MCTSPlanner:
 
         best_dest = None
         best_score = float("-inf")
+        deadline = time.monotonic() + TIME_BUDGET_SECONDS
 
         for dest in candidates[: self.n_simulations]:
+            if time.monotonic() > deadline:
+                break
             try:
                 score = self._rollout(game, unit_id, dest)
             except Exception:

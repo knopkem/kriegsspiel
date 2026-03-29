@@ -71,14 +71,17 @@ class SimpleAICommander:
         focus_assignments: dict[str, Unit] = {}
         if self.profile.use_focus_fire and visible_enemies:
             non_cmdr = [u for u in active_units if u.unit_type is not UnitType.COMMANDER]
-            focus_assignments = self.tactics.assign_targets(non_cmdr, visible_enemies, self.evaluator)
+            focus_assignments = self.tactics.assign_targets(
+                non_cmdr, visible_enemies, self.evaluator,
+                use_morale_exploitation=True,
+            )
 
         for unit in active_units:
             if unit.unit_type is UnitType.COMMANDER:
                 continue
 
-            # D6: Reserve management for infantry (use_focus_fire reused as advanced-tactics gate)
-            if self.profile.use_focus_fire and unit.unit_type is UnitType.INFANTRY:
+        # D6: Reserve management — extended to all combat unit types
+            if self.profile.use_focus_fire:
                 if not self.reserve_manager.should_commit(unit, game, active_units):
                     reserve_pos = self.reserve_manager.reserve_position(unit, game)
                     if reserve_pos is not None:
@@ -117,8 +120,13 @@ class SimpleAICommander:
         focus_assignments: dict[str, Unit] | None = None,
     ) -> Order | None:
         if unit.morale_state in {MoraleState.ROUTING, MoraleState.BROKEN} or unit.casualty_ratio >= self.profile.retreat_threshold:
+            friendly_units = [
+                u for u in game.units.values()
+                if u.side is unit.side and not u.is_removed and u.position is not None
+            ]
             destination = self.tactics.choose_retreat_destination(
-                unit, game.battle_map, self.evaluator, visible_enemies
+                unit, game.battle_map, self.evaluator, visible_enemies,
+                friendlies=friendly_units,
             )
             return game.order_book.issue_retreat(unit.id, destination, current_turn=game.current_turn, priority=20)
 
@@ -126,7 +134,10 @@ class SimpleAICommander:
         if focus_assignments and unit.id in focus_assignments:
             target = focus_assignments[unit.id]
         else:
-            target = self.evaluator.best_target(unit, visible_enemies)
+            target = self.evaluator.best_target(
+                unit, visible_enemies,
+                use_morale_exploitation=self.profile.use_focus_fire,
+            )
 
         # D8: Infantry vs steady fortified enemy — only attack if 3:1 advantage
         if (
@@ -167,6 +178,14 @@ class SimpleAICommander:
 
             # Role-specific approach destination
             approach_dest = target.position
+
+            # I2: Compute enemy centroid for role decisions
+            enemy_centroid: HexCoord | None = None
+            if visible_enemies:
+                eq = sum(e.position.q for e in visible_enemies if e.position) / len(visible_enemies)
+                er = sum(e.position.r for e in visible_enemies if e.position) / len(visible_enemies)
+                enemy_centroid = HexCoord(int(round(eq)), int(round(er)))
+
             if self.profile.use_flanking and unit.unit_type is UnitType.CAVALRY:
                 flank = self.tactics.cavalry_flanking_destination(unit, visible_enemies, game.battle_map)
                 if flank is not None:
@@ -179,6 +198,10 @@ class SimpleAICommander:
                 skr = self.tactics.skirmisher_harassment_hex(unit, visible_enemies, game.battle_map)
                 if skr is not None:
                     approach_dest = skr
+            elif unit.unit_type is UnitType.INFANTRY and self.profile.use_terrain_scoring:
+                hold = self.tactics.infantry_hold_hex(unit, game.battle_map, enemy_centroid)
+                if hold is not None and game.battle_map.terrain_at(hold).value in ("hill", "fortification", "village", "forest"):
+                    approach_dest = hold
 
             # D5: MCTS refinement for ARTILLERY/CAVALRY
             if self.mcts is not None and unit.unit_type in {UnitType.ARTILLERY, UnitType.CAVALRY}:

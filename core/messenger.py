@@ -12,6 +12,33 @@ from .orders import Order, OrderBook, OrderType
 from .units import Unit, UnitType
 
 
+def is_intercepted(
+    path: list[HexCoord],
+    enemy_units: Iterable[Unit],
+    rng: random.Random,
+    *,
+    base_chance: float = 0.25,
+    intercept_radius: int = 2,
+) -> bool:
+    """Return True if a courier travelling *path* is intercepted by a nearby enemy unit.
+
+    Any enemy cavalry or skirmisher within *intercept_radius* hexes of any step
+    on the path constitutes a threat; if a threat exists a single RNG roll is
+    made against *base_chance*.
+    """
+    path_list = list(path)
+    threat = any(
+        enemy.position is not None
+        and not enemy.is_removed
+        and enemy.unit_type in {UnitType.CAVALRY, UnitType.SKIRMISHER}
+        and any(enemy.position.distance_to(step) <= intercept_radius for step in path_list)
+        for enemy in enemy_units
+    )
+    if not threat:
+        return False
+    return rng.random() < base_chance
+
+
 @dataclass(slots=True)
 class MessengerSystem:
     battle_map: HexGridMap

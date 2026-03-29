@@ -266,6 +266,26 @@
         2
       ],
       "command_radius": 6
+    },
+    {
+      "id": "blue_wagon1",
+      "name": "Blue Supply Wagon",
+      "type": "supply_wagon",
+      "side": "blue",
+      "position": [
+        12,
+        35
+      ]
+    },
+    {
+      "id": "red_wagon1",
+      "name": "Red Supply Wagon",
+      "type": "supply_wagon",
+      "side": "red",
+      "position": [
+        12,
+        5
+      ]
     }
   ],
   "objectives": [
@@ -307,5 +327,124 @@
     }
   ],
   "starting_turn": 1,
-  "reinforcements": []
+  "difficulty_stars": 4,
+  "reinforcements": [
+    {
+      "turn": 6,
+      "side": "blue",
+      "units": [
+        {
+          "id": "pr_reinf_inf1",
+          "name": "Prussian Reserve Inf",
+          "type": "infantry",
+          "side": "blue",
+          "formation": "column",
+          "hp": 10,
+          "max_hp": 10,
+          "strength": 100,
+          "max_strength": 100,
+          "morale": "steady",
+          "fatigue": 0,
+          "ammo": 60,
+          "max_ammo": 60,
+          "facing": "NE"
+        },
+        {
+          "id": "pr_reinf_inf2",
+          "name": "Prussian Landwehr",
+          "type": "infantry",
+          "side": "blue",
+          "formation": "column",
+          "hp": 10,
+          "max_hp": 10,
+          "strength": 80,
+          "max_strength": 80,
+          "morale": "steady",
+          "fatigue": 0,
+          "ammo": 60,
+          "max_ammo": 60,
+          "facing": "NE"
+        },
+        {
+          "id": "pr_reinf_cav1",
+          "name": "Prussian Hussars",
+          "type": "cavalry",
+          "side": "blue",
+          "formation": "column",
+          "hp": 10,
+          "max_hp": 10,
+          "strength": 60,
+          "max_strength": 60,
+          "morale": "steady",
+          "fatigue": 0,
+          "ammo": 0,
+          "max_ammo": 0,
+          "facing": "NE"
+        }
+      ],
+      "entry_coords": [
+        [
+          25,
+          39
+        ],
+        [
+          26,
+          39
+        ],
+        [
+          27,
+          39
+        ]
+      ]
+    },
+    {
+      "turn": 8,
+      "side": "red",
+      "units": [
+        {
+          "id": "fr_reinf_inf1",
+          "name": "French Reserve Infantry",
+          "type": "infantry",
+          "side": "red",
+          "formation": "column",
+          "hp": 10,
+          "max_hp": 10,
+          "strength": 100,
+          "max_strength": 100,
+          "morale": "steady",
+          "fatigue": 0,
+          "ammo": 60,
+          "max_ammo": 60,
+          "facing": "SE"
+        },
+        {
+          "id": "fr_reinf_art1",
+          "name": "French Reserve Battery",
+          "type": "artillery",
+          "side": "red",
+          "formation": "limbered",
+          "hp": 10,
+          "max_hp": 10,
+          "strength": 60,
+          "max_strength": 60,
+          "morale": "steady",
+          "fatigue": 0,
+          "ammo": 40,
+          "max_ammo": 40,
+          "facing": "E"
+        }
+      ],
+      "entry_coords": [
+        [
+          0,
+          20
+        ],
+        [
+          0,
+          21
+        ]
+      ]
+    }
+  ],
+  "briefing": "June 16, 1815. Napoleon faces the Prussian Army of the Lower Rhine under Field Marshal Blücher at the village of Ligny. Outnumbered but striking before Wellington can unite his forces, Napoleon must shatter the Prussians before they can retreat north to link with the British.\n\nThe French (RED) must push across the Ligny stream and seize the key villages before the Prussians can consolidate their defensive line. Prussian reinforcements are expected by mid-afternoon — the French must act swiftly.\n\nThe Prussians (BLUE) must hold the stream line and the villages long enough for Wellington to be drawn into the fight. A fighting withdrawal is an honourable result; total defeat means the coalition collapses."
 }

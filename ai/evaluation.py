@@ -47,8 +47,9 @@ class BattlefieldEvaluator:
         }.get(unit.unit_type, 1.0)
         return base * type_multiplier
 
-    def best_target(self, unit: Unit, visible_enemies: Iterable[Unit]) -> Unit | None:
-        """Pick highest-threat visible enemy. Prefer routing/shaken enemies (easier finish)."""
+    def best_target(self, unit: Unit, visible_enemies: Iterable[Unit], use_morale_exploitation: bool = True) -> Unit | None:
+        """Pick highest-threat visible enemy. When use_morale_exploitation is True,
+        prefer routing/shaken/broken enemies (easier finish)."""
         from core.units import MoraleState
         enemies = list(visible_enemies)
         if not enemies:
@@ -64,8 +65,13 @@ class BattlefieldEvaluator:
             dist = unit.position.distance_to(enemy.position)
             fp = self.firepower_estimate(enemy)
             threat = fp / (dist + 1)
-            if enemy.morale_state in (MoraleState.ROUTING, MoraleState.SHAKEN):
-                threat *= 1.5
+            if use_morale_exploitation:
+                if enemy.morale_state is MoraleState.BROKEN:
+                    threat *= 2.5
+                elif enemy.morale_state is MoraleState.ROUTING:
+                    threat *= 2.0
+                elif enemy.morale_state is MoraleState.SHAKEN:
+                    threat *= 1.5
             if threat > best_score:
                 best_score = threat
                 best = enemy

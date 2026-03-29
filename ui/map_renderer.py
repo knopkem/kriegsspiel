@@ -182,10 +182,16 @@ def _build_terrain_surface(
 
         elev = game.battle_map.elevation_at(coord)
         shade = max(0.78, 1.0 - elev * 0.0025)
+        n_nb = HexCoord(coord.q, coord.r - 1)
+        s_nb = HexCoord(coord.q, coord.r + 1)
+        if game.battle_map.in_bounds(n_nb) and game.battle_map.elevation_at(n_nb) > elev:
+            shade *= 1.08
+        elif game.battle_map.in_bounds(s_nb) and game.battle_map.elevation_at(s_nb) > elev:
+            shade *= 0.88
         shaded = (
-            int(min(255, base_colour[0] * shade)),
-            int(min(255, base_colour[1] * shade)),
-            int(min(255, base_colour[2] * shade)),
+            int(max(0, min(255, base_colour[0] * shade))),
+            int(max(0, min(255, base_colour[1] * shade))),
+            int(max(0, min(255, base_colour[2] * shade))),
         )
 
         pygame.draw.polygon(surf, shaded, polygon)
@@ -275,10 +281,16 @@ def _draw_terrain_direct(
         base_colour = TERRAIN_COLOURS[terrain]
         elev = game.battle_map.elevation_at(coord)
         shade = max(0.78, 1.0 - elev * 0.0025)
+        n_nb = HexCoord(coord.q, coord.r - 1)
+        s_nb = HexCoord(coord.q, coord.r + 1)
+        if game.battle_map.in_bounds(n_nb) and game.battle_map.elevation_at(n_nb) > elev:
+            shade *= 1.08
+        elif game.battle_map.in_bounds(s_nb) and game.battle_map.elevation_at(s_nb) > elev:
+            shade *= 0.88
         shaded = (
-            int(min(255, base_colour[0] * shade)),
-            int(min(255, base_colour[1] * shade)),
-            int(min(255, base_colour[2] * shade)),
+            int(max(0, min(255, base_colour[0] * shade))),
+            int(max(0, min(255, base_colour[1] * shade))),
+            int(max(0, min(255, base_colour[2] * shade))),
         )
         pygame.draw.polygon(surface, shaded, polygon)
         pygame.draw.polygon(surface, (70, 60, 50), polygon, 1)
@@ -411,39 +423,69 @@ def _draw_terrain_detail(
 ) -> None:
     cx, cy = center
     s = hex_size
+    h = (coord.q * 73856093) ^ (coord.r * 19349663)
 
     if terrain is TerrainType.FOREST:
-        offsets = ((-s * 0.2, -s * 0.1), (s * 0.15, -s * 0.15), (0.0, s * 0.15))
-        r = max(2, int(s * 0.1))
-        for dx, dy in offsets:
-            pygame.draw.circle(surface, (35, 80, 35), (int(cx + dx), int(cy + dy)), r)
+        n_trees = 5 + (abs(h) % 3)
+        for i in range(n_trees):
+            angle = math.radians(((h >> (i * 8)) & 0xFF) * 360 / 255)
+            dist = s * 0.28 * (0.3 + 0.7 * ((h >> (i * 4 + 4)) & 0xF) / 15.0)
+            tx = cx + int(dist * math.cos(angle))
+            ty = cy + int(dist * math.sin(angle))
+            r_tree = max(2, int(s * (0.08 + 0.05 * ((h >> (i * 3 + 1)) & 3) / 3)))
+            pygame.draw.circle(surface, (35, 80, 35), (tx, ty), r_tree)
+            pygame.draw.line(surface, (100, 65, 30), (tx, ty + r_tree), (tx, ty + r_tree + 2), 2)
 
     elif terrain is TerrainType.HILL:
-        arc_w = max(4, int(s * 0.5))
-        arc_h = max(2, int(s * 0.25))
-        for dy_off in (-int(s * 0.1), int(s * 0.1)):
-            rect = pygame.Rect(cx - arc_w // 2, cy + dy_off - arc_h // 2, arc_w, arc_h)
-            pygame.draw.arc(surface, (100, 78, 42), rect, 0, math.pi, max(1, int(s * 0.04)))
+        n_arcs = 2 + (abs(h) & 1)
+        for i in range(n_arcs):
+            arc_w = max(4, int(s * (0.38 + 0.12 * i)))
+            arc_h = max(2, int(s * (0.18 + 0.07 * i)))
+            dy_off = -int(s * 0.10) + i * int(s * 0.14)
+            highlight_rect = pygame.Rect(cx - arc_w // 2, cy + dy_off - arc_h // 2, arc_w, arc_h)
+            pygame.draw.arc(surface, (145, 110, 58), highlight_rect, 0, math.pi, max(1, int(s * 0.04)))
+            shadow_rect = pygame.Rect(cx - arc_w // 2, cy + dy_off - arc_h // 2 + 2, arc_w, arc_h)
+            pygame.draw.arc(surface, (75, 50, 18), shadow_rect, math.pi, 2 * math.pi, max(1, int(s * 0.04)))
 
     elif terrain is TerrainType.MARSH:
-        line_half = max(2, int(s * 0.25 / 2))
-        for dy_off in (-int(s * 0.15), 0, int(s * 0.15)):
-            pygame.draw.line(
-                surface, (65, 95, 115),
-                (cx - line_half, cy + dy_off),
-                (cx + line_half, cy + dy_off),
-                max(1, int(s * 0.04)),
-            )
+        n_reeds = 4 + (abs(h) & 1)
+        reed_span = int(s * 0.45)
+        for i in range(n_reeds):
+            rx = cx - reed_span // 2 + (reed_span * i) // max(1, n_reeds - 1)
+            ry_off = -int(s * 0.05) - ((h >> i) & 3)
+            pygame.draw.line(surface, (65, 95, 115), (rx, cy + ry_off), (rx, cy + ry_off - 3), 2)
+            pygame.draw.circle(surface, (65, 95, 115), (rx, cy + ry_off - 3), 1)
+        wave_y_base = cy + int(s * 0.18)
+        for wi in range(2):
+            wy = wave_y_base + wi * 3
+            wx_start = cx - int(s * 0.22)
+            wx_end = cx + int(s * 0.22)
+            step = 4
+            for wx in range(wx_start, wx_end - step + 1, step):
+                pygame.draw.line(surface, (55, 85, 105), (wx, wy), (wx + step // 2, wy + 1), 1)
+                pygame.draw.line(surface, (55, 85, 105), (wx + step // 2, wy + 1), (wx + step, wy), 1)
 
     elif terrain is TerrainType.VILLAGE:
-        hw = max(4, int(s * 0.18))
-        rect = pygame.Rect(cx - hw // 2, cy - hw // 2, hw, hw)
-        pygame.draw.rect(surface, (130, 95, 65), rect)
+        n_houses = 2 + (abs(h) & 1)
+        hw, hh = 6, 5
+        gap = 3
+        total_w = n_houses * hw + (n_houses - 1) * gap
+        base_x = cx - total_w // 2
+        base_y = cy - hh // 2
+        for i in range(n_houses):
+            hx = base_x + i * (hw + gap)
+            pygame.draw.rect(surface, (130, 95, 65), (hx, base_y + 2, hw, hh - 2))
+            pygame.draw.rect(surface, (100, 68, 42), (hx, base_y, hw, 2))
+            chimney_x = hx + hw - 2
+            pygame.draw.line(surface, (80, 55, 30), (chimney_x, base_y - 2), (chimney_x, base_y), 1)
 
     elif terrain is TerrainType.FORTIFICATION:
-        d = max(5, int(s * 0.2))
+        d = max(5, int(s * 0.22))
         pts = [(cx, cy - d), (cx + d, cy), (cx, cy + d), (cx - d, cy)]
         pygame.draw.polygon(surface, (80, 65, 100), pts, max(1, int(s * 0.05)))
+        bastion_r = max(2, int(s * 0.07))
+        for pt in pts:
+            pygame.draw.circle(surface, (80, 65, 100), pt, bastion_r)
 
 
 def hex_polygon(center: tuple[int, int], size: float) -> list[tuple[int, int]]:

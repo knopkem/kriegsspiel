@@ -320,3 +320,67 @@ class CombatResolver:
         if steps:
             unit.degrade_morale(steps)
 
+
+def preview_combat(
+    attacker: Unit,
+    defender: Unit,
+    *,
+    distance_hexes: int,
+    defender_terrain: TerrainType,
+) -> tuple[int, int, str]:
+    """Estimate combat outcome without modifying any game state.
+
+    Returns (min_dmg, max_dmg, morale_risk_description).
+    """
+    tables = load_combat_tables()
+    resolver = CombatResolver(tables=tables)
+
+    if distance_hexes <= 1:
+        # Melee estimate
+        odds_key, die_id = resolver._melee_profile(attacker, defender)
+        base_damage = tables.melee_tables[odds_key]
+        multipliers = tables.dice_profiles[die_id]
+        min_mult = min(multipliers)
+        max_mult = max(multipliers)
+        defense = resolver._ranged_defense_multiplier(defender, defender_terrain)
+        def_calc = lambda mult: max(0, round(base_damage * mult * attacker.combat_effectiveness / defense))
+        min_dmg = def_calc(min_mult)
+        max_dmg = def_calc(max_mult)
+    else:
+        # Ranged estimate - check ammo without consuming
+        if attacker.max_ammo > 0 and attacker.ammo == 0:
+            return 0, 0, "Out of ammo"
+        try:
+            table_key, die_id = resolver._ranged_profile(attacker, defender, distance_hexes, defender_terrain)
+        except ValueError:
+            return 0, 0, "Out of range"
+        band_key = str(distance_hexes)
+        ranged_tables = tables.ranged_tables
+        if table_key not in ranged_tables or band_key not in ranged_tables[table_key]:
+            return 0, 0, "Out of range"
+        base_damage = ranged_tables[table_key][band_key]
+        multipliers = tables.dice_profiles[die_id]
+        min_mult = min(multipliers)
+        max_mult = max(multipliers)
+        defense = resolver._ranged_defense_multiplier(defender, defender_terrain)
+        min_dmg = max(0, round(base_damage * min_mult * attacker.combat_effectiveness / defense))
+        max_dmg = max(0, round(base_damage * max_mult * attacker.combat_effectiveness / defense))
+
+    # Morale risk estimate
+    threshold_15 = max(1, math.ceil(defender.max_hit_points * 0.15))
+    current_morale = defender.morale_state
+    morale_order = [MoraleState.STEADY, MoraleState.SHAKEN, MoraleState.ROUTING, MoraleState.BROKEN]
+    cur_idx = morale_order.index(current_morale)
+
+    if max_dmg >= threshold_15:
+        next_idx = min(len(morale_order) - 1, cur_idx + 1)
+        next_morale = morale_order[next_idx]
+        if next_morale != current_morale:
+            morale_risk = f"Morale: {current_morale.value.capitalize()}→{next_morale.value.capitalize()}"
+        else:
+            morale_risk = f"Morale: {current_morale.value.capitalize()} (stable)"
+    else:
+        morale_risk = f"Morale: {current_morale.value.capitalize()} (stable)"
+
+    return min_dmg, max_dmg, morale_risk
+

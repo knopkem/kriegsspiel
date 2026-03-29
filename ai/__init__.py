@@ -1,5 +1,6 @@
 """AI helpers for solo play."""
 
+from .adaptive import AdaptiveController as AdaptiveStatsController
 from .belief import BeliefMap, EnemyBelief
 from .difficulty import AIDifficulty, AIDifficultyProfile, AdaptiveController, get_difficulty_profile
 from .evaluation import BattlefieldEvaluator
@@ -14,6 +15,7 @@ __all__ = [
     "AIDifficulty",
     "AIDifficultyProfile",
     "AdaptiveController",
+    "AdaptiveStatsController",
     "BeliefMap",
     "BattlefieldEvaluator",
     "BalancePlaytester",

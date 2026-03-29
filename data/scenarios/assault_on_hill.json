@@ -162,5 +162,6 @@
       "points": 5
     }
   ],
-  "starting_turn": 1
+  "starting_turn": 1,
+  "difficulty_stars": 3
 }

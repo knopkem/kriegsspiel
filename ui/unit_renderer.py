@@ -8,11 +8,21 @@ import pygame
 
 from core.fog_of_war import VisibilitySnapshot
 from core.game import GameState
-from core.units import MoraleState, Side, Unit, UnitType
+from core.units import FacingDirection, MoraleState, Side, Unit, UnitType
 
 from .bitmap_font import BitmapFont
 from .camera import Camera
 from . import themes
+
+
+_FACING_ANGLES: dict[FacingDirection, float] = {
+    FacingDirection.SE: math.radians(0),
+    FacingDirection.S:  math.radians(60),
+    FacingDirection.SW: math.radians(120),
+    FacingDirection.NW: math.radians(180),
+    FacingDirection.N:  math.radians(240),
+    FacingDirection.NE: math.radians(300),
+}
 
 
 def _draw_infantry_symbol(surface, cx, cy, w, h):
@@ -166,6 +176,32 @@ class UnitRenderer:
         filled_mor = int(bar_w * max(0.0, min(1.0, m_ratio)))
         if filled_mor > 0:
             pygame.draw.rect(surface, m_colour, (bar_x, mor_y, filled_mor, bar_h))
+
+        # K7: facing chevron at zoom >= 1.0
+        if camera.zoom >= 1.0:
+            theta = _FACING_ANGLES.get(unit.facing, 0.0)
+            cos_t, sin_t = math.cos(theta), math.sin(theta)
+            arm = 4
+            tip_x = sym_cx + int(arm * cos_t)
+            tip_y = sym_cy + int(arm * sin_t)
+            lx = tip_x + int(arm * math.cos(theta + math.radians(150)))
+            ly = tip_y + int(arm * math.sin(theta + math.radians(150)))
+            rx = tip_x + int(arm * math.cos(theta - math.radians(150)))
+            ry = tip_y + int(arm * math.sin(theta - math.radians(150)))
+            pygame.draw.line(surface, (255, 255, 255), (tip_x, tip_y), (lx, ly), 2)
+            pygame.draw.line(surface, (255, 255, 255), (tip_x, tip_y), (rx, ry), 2)
+
+        # K8: entrenchment dashes below counter
+        if unit.is_entrenched:
+            dash_w = 6
+            dash_h = 2
+            dash_gap = 3
+            total_dash_w = 3 * dash_w + 2 * dash_gap
+            dash_x = rect.centerx - total_dash_w // 2
+            dash_y = rect.bottom + 2
+            for i in range(3):
+                dx = dash_x + i * (dash_w + dash_gap)
+                pygame.draw.rect(surface, (120, 80, 30), (dx, dash_y, dash_w, dash_h))
 
     def _draw_ghost(self, surface: pygame.Surface, camera: Camera, ghost) -> None:
         center = camera.axial_to_screen(ghost.position)

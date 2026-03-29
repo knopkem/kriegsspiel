@@ -67,5 +67,6 @@
       "points": 2
     }
   ],
-  "starting_turn": 1
+  "starting_turn": 1,
+  "difficulty_stars": 1
 }

@@ -32,18 +32,22 @@ DIFFICULTY_PROFILES: dict[AIDifficulty, AIDifficultyProfile] = {
     AIDifficulty.EASY: AIDifficultyProfile(
         aggression=0.8, retreat_threshold=0.3, random_move_bias=0.3, objective_bias=0.9,
         use_flanking=False, use_focus_fire=False, use_terrain_scoring=False, use_belief_map=False,
+        lookahead_depth=0,
     ),
     AIDifficulty.MEDIUM: AIDifficultyProfile(
         aggression=1.0, retreat_threshold=0.28, random_move_bias=0.1, objective_bias=1.0,
-        use_flanking=True, use_focus_fire=False, use_terrain_scoring=True, use_belief_map=False,
+        use_flanking=True, use_focus_fire=True, use_terrain_scoring=True, use_belief_map=False,
+        lookahead_depth=2,
     ),
     AIDifficulty.HARD: AIDifficultyProfile(
         aggression=1.1, retreat_threshold=0.22, random_move_bias=0.05, objective_bias=1.15,
         use_flanking=True, use_focus_fire=True, use_terrain_scoring=True, use_belief_map=True,
+        lookahead_depth=3,
     ),
     AIDifficulty.HISTORICAL: AIDifficultyProfile(
         aggression=1.0, retreat_threshold=0.28, random_move_bias=0.15, objective_bias=1.1,
         use_flanking=True, use_focus_fire=True, use_terrain_scoring=True, use_belief_map=True,
+        lookahead_depth=4,
     ),
 }
 

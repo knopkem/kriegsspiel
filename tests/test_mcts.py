@@ -50,9 +50,8 @@ class MCTSPlannerTestCase(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_lookahead_depth_zero_no_planner(self) -> None:
-        """SimpleAICommander with lookahead_depth=0 profile should have mcts=None."""
-        # MEDIUM profile has lookahead_depth=0 by default
-        ai = SimpleAICommander(Side.RED, difficulty=AIDifficulty.MEDIUM, seed=1)
+        """SimpleAICommander with lookahead_depth=0 profile (EASY) should have mcts=None."""
+        ai = SimpleAICommander(Side.RED, difficulty=AIDifficulty.EASY, seed=1)
         self.assertIsNone(ai.mcts)
 
 
