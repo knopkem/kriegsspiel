@@ -1,0 +1,61 @@
+{
+  "dice_profiles": {
+    "I": [0.75, 0.9, 1.0, 1.0, 1.1, 1.25],
+    "II": [0.7, 0.8, 0.9, 1.0, 1.1, 1.2],
+    "III": [0.8, 1.0, 1.1, 1.2, 1.3, 1.5],
+    "IV": [0.9, 1.0, 1.1, 1.2, 1.3, 1.4],
+    "V": [0.6, 0.8, 0.9, 1.0, 1.1, 1.2]
+  },
+  "ranged_tables": {
+    "infantry_open": { "1": 18, "2": 14, "3": 10, "4": 6 },
+    "skirmisher_cover": { "1": 10, "2": 8, "3": 6, "4": 4, "5": 2 },
+    "artillery_good": { "1": 24, "2": 20, "3": 16, "4": 12, "5": 8, "6": 5, "7": 3, "8": 2, "9": 1, "10": 1 },
+    "artillery_bad": { "1": 16, "2": 12, "3": 10, "4": 8, "5": 5, "6": 3, "7": 2, "8": 1, "9": 1, "10": 0 }
+  },
+  "melee_tables": {
+    "even": 14,
+    "three_to_two": 18,
+    "three_to_one": 24,
+    "four_to_one": 30
+  },
+  "terrain_fire_defense": {
+    "open": 1.0,
+    "road": 0.95,
+    "forest": 1.35,
+    "hill": 1.1,
+    "river": 1.0,
+    "village": 1.25,
+    "marsh": 0.95,
+    "fortification": 1.6
+  },
+  "terrain_melee_defense": {
+    "open": 1.0,
+    "road": 1.0,
+    "forest": 1.2,
+    "hill": 1.15,
+    "river": 1.1,
+    "village": 1.15,
+    "marsh": 0.9,
+    "fortification": 1.35
+  },
+  "formation_modifiers": {
+    "ranged": {
+      "line": 1.0,
+      "column": 0.9,
+      "square": 1.1,
+      "skirmish": 1.2,
+      "limbered": 0.85,
+      "unlimbered": 1.0,
+      "staff": 0.8
+    },
+    "melee": {
+      "line": 1.0,
+      "column": 0.95,
+      "square": 1.4,
+      "skirmish": 0.8,
+      "limbered": 0.7,
+      "unlimbered": 0.85,
+      "staff": 0.6
+    }
+  }
+}

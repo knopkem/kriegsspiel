@@ -1,0 +1,22 @@
+{
+  "scenario_id": "tutorial",
+  "title": "Tutorial: First Contact",
+  "description": "A small scenario for learning movement, attack orders, and basic fog of war.",
+  "map_rows": [
+    "......",
+    "..ff..",
+    "..rr..",
+    "...v..",
+    "......"
+  ],
+  "units": [
+    { "id": "blue-inf-1", "name": "Tutorial Fusiliers", "side": "blue", "type": "infantry", "position": [1, 2] },
+    { "id": "blue-hq", "name": "Lt. Meyer", "side": "blue", "type": "commander", "position": [0, 2], "command_radius": 4 },
+    { "id": "red-inf-1", "name": "Tutorial Grenadiers", "side": "red", "type": "infantry", "position": [4, 2] },
+    { "id": "red-hq", "name": "Lt. Falk", "side": "red", "type": "commander", "position": [5, 2], "command_radius": 4 }
+  ],
+  "objectives": [
+    { "id": "village", "label": "Village", "position": [3, 3], "points": 2 }
+  ],
+  "starting_turn": 1
+}

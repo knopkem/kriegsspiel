@@ -1,0 +1,37 @@
+{
+  "scenario_id": "full_battle",
+  "title": "Meeting Engagement",
+  "description": "A larger battle with multiple arms and several objectives.",
+  "map_rows": [
+    "....hhh.....",
+    "..rrhhhh....",
+    "..rfffhh....",
+    "...fffhhv...",
+    "...rrr......",
+    "..v..w..v...",
+    "...mmm......",
+    "...rrrhh....",
+    "..ffffhh....",
+    "....hhh....."
+  ],
+  "units": [
+    { "id": "blue-inf-1", "name": "1st Brigade Left", "side": "blue", "type": "infantry", "position": [1, 4] },
+    { "id": "blue-inf-2", "name": "1st Brigade Right", "side": "blue", "type": "infantry", "position": [2, 5] },
+    { "id": "blue-cav-1", "name": "Blue Hussars", "side": "blue", "type": "cavalry", "position": [0, 6] },
+    { "id": "blue-gun-1", "name": "Battery A", "side": "blue", "type": "artillery", "position": [0, 4] },
+    { "id": "blue-skr-1", "name": "Blue Jaegers", "side": "blue", "type": "skirmisher", "position": [2, 3] },
+    { "id": "blue-hq", "name": "Gen. Hartmann", "side": "blue", "type": "commander", "position": [1, 7], "command_radius": 6 },
+    { "id": "red-inf-1", "name": "2nd Brigade Left", "side": "red", "type": "infantry", "position": [10, 4] },
+    { "id": "red-inf-2", "name": "2nd Brigade Right", "side": "red", "type": "infantry", "position": [9, 5] },
+    { "id": "red-cav-1", "name": "Red Dragoons", "side": "red", "type": "cavalry", "position": [11, 6] },
+    { "id": "red-gun-1", "name": "Battery B", "side": "red", "type": "artillery", "position": [11, 4] },
+    { "id": "red-skr-1", "name": "Red Jaegers", "side": "red", "type": "skirmisher", "position": [9, 3] },
+    { "id": "red-hq", "name": "Gen. Richter", "side": "red", "type": "commander", "position": [10, 7], "command_radius": 6 }
+  ],
+  "objectives": [
+    { "id": "north_ridge", "label": "North Ridge", "position": [5, 1], "points": 3 },
+    { "id": "central_crossroads", "label": "Central Crossroads", "position": [5, 4], "points": 4 },
+    { "id": "southern_village", "label": "Southern Village", "position": [8, 5], "points": 2 }
+  ],
+  "starting_turn": 1
+}

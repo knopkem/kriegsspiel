@@ -1,0 +1,28 @@
+{
+  "scenario_id": "skirmish_small",
+  "title": "Skirmish at the Orchard",
+  "description": "A compact engagement suitable for early testing of movement, orders, and combat.",
+  "map_rows": [
+    "....v....",
+    "...fff...",
+    "..rrr....",
+    "..rhh....",
+    "....w....",
+    "....v...."
+  ],
+  "units": [
+    { "id": "blue-inf-1", "name": "3rd Fusiliers", "side": "blue", "type": "infantry", "position": [1, 2] },
+    { "id": "blue-cav-1", "name": "1st Hussars", "side": "blue", "type": "cavalry", "position": [1, 1] },
+    { "id": "blue-gun-1", "name": "Battery A", "side": "blue", "type": "artillery", "position": [0, 3] },
+    { "id": "blue-hq", "name": "Maj. Braun", "side": "blue", "type": "commander", "position": [0, 1], "command_radius": 5 },
+    { "id": "red-inf-1", "name": "2nd Grenadiers", "side": "red", "type": "infantry", "position": [7, 2] },
+    { "id": "red-skr-1", "name": "Jaeger Screen", "side": "red", "type": "skirmisher", "position": [6, 1] },
+    { "id": "red-gun-1", "name": "Battery B", "side": "red", "type": "artillery", "position": [8, 3] },
+    { "id": "red-hq", "name": "Capt. Vogel", "side": "red", "type": "commander", "position": [8, 1], "command_radius": 5 }
+  ],
+  "objectives": [
+    { "id": "orchard", "label": "Orchard", "position": [4, 0], "points": 3 },
+    { "id": "bridge", "label": "Bridge", "position": [4, 4], "points": 2 }
+  ],
+  "starting_turn": 1
+}

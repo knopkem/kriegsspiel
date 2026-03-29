@@ -1,0 +1,29 @@
+{
+  "scenario_id": "assault_on_hill",
+  "title": "Assault on the Ridge",
+  "description": "An attacker-defender scenario focused on hills, artillery, and defensive positions.",
+  "map_rows": [
+    "...hhh....",
+    "..hhhhh...",
+    ".rrhhhrr..",
+    "..hfffh...",
+    "...hvh....",
+    "....w.....",
+    "....v....."
+  ],
+  "units": [
+    { "id": "blue-inf-1", "name": "4th Line Battalion", "side": "blue", "type": "infantry", "position": [1, 4] },
+    { "id": "blue-inf-2", "name": "5th Line Battalion", "side": "blue", "type": "infantry", "position": [2, 5] },
+    { "id": "blue-gun-1", "name": "Blue Battery", "side": "blue", "type": "artillery", "position": [0, 5] },
+    { "id": "blue-hq", "name": "Col. Stein", "side": "blue", "type": "commander", "position": [1, 6], "command_radius": 5 },
+    { "id": "red-inf-1", "name": "Ridge Guard", "side": "red", "type": "infantry", "position": [5, 1] },
+    { "id": "red-inf-2", "name": "Reserve Grenadiers", "side": "red", "type": "infantry", "position": [6, 2] },
+    { "id": "red-gun-1", "name": "Red Battery", "side": "red", "type": "artillery", "position": [4, 0] },
+    { "id": "red-hq", "name": "Maj. Vogel", "side": "red", "type": "commander", "position": [7, 1], "command_radius": 5 }
+  ],
+  "objectives": [
+    { "id": "ridge", "label": "Main Ridge", "position": [4, 1], "points": 4 },
+    { "id": "hamlet", "label": "Hamlet", "position": [4, 4], "points": 2 }
+  ],
+  "starting_turn": 1
+}
