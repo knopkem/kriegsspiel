@@ -17,6 +17,7 @@ class OrderType(StrEnum):
     RALLY = "rally"
     HOLD = "hold"
     RETREAT = "retreat"
+    COMMANDER_ABILITY = "commander_ability"
 
 
 class OrderStatus(StrEnum):
@@ -40,6 +41,7 @@ class Order:
     target_unit_id: str | None = None
     formation: Formation | None = None
     notes: str = ""
+    ability: str | None = None
     status: OrderStatus = OrderStatus.QUEUED
 
     def __post_init__(self) -> None:
@@ -220,6 +222,23 @@ class OrderBook:
             priority=priority,
             destination=destination,
             notes=notes,
+        )
+
+    def issue_commander_ability(
+        self,
+        commander_id: str,
+        target_unit_id: str,
+        ability: str,
+        current_turn: int,
+    ) -> Order:
+        return self.issue(
+            OrderType.COMMANDER_ABILITY,
+            commander_id,
+            current_turn=current_turn,
+            delay_turns=0,
+            priority=5,
+            target_unit_id=target_unit_id,
+            notes=f"ability:{ability}",
         )
 
     def get(self, order_id: str) -> Order:

@@ -12,10 +12,10 @@ class GameStateTestCase(unittest.TestCase):
         scenario = load_builtin_scenario("skirmish_small")
         game = GameState.from_scenario(scenario, rng_seed=1)
 
-        game.order_book.issue_move("blue-inf-1", HexCoord(3, 2), current_turn=1)
+        game.order_book.issue_move("blue-inf-1", HexCoord(3, 9), current_turn=1)
         events = game.advance_turn()
 
-        self.assertEqual(game.units["blue-inf-1"].position, HexCoord(3, 2))
+        self.assertEqual(game.units["blue-inf-1"].position, HexCoord(3, 9))
         self.assertTrue(any(event.category == "movement" for event in events))
 
     def test_turn_engine_resolves_formation_then_attack(self) -> None:
@@ -57,7 +57,7 @@ class GameStateTestCase(unittest.TestCase):
     def test_score_for_side_counts_objectives_and_enemy_losses(self) -> None:
         scenario = load_builtin_scenario("skirmish_small")
         game = GameState.from_scenario(scenario, rng_seed=1)
-        game.units["blue-inf-1"].position = HexCoord(4, 0)
+        game.units["blue-inf-1"].position = HexCoord(8, 9)
         game.units["red-inf-1"].apply_damage(20)
 
         score = game.score_for_side(Side.BLUE)

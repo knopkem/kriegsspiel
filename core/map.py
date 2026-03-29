@@ -20,6 +20,20 @@ class TerrainType(StrEnum):
     FORTIFICATION = "fortification"
 
 
+# Slope thresholds (metres height change per 75 m hex width).
+# These correspond roughly to grades: gentle <7%, moderate 7–20%, steep >20%.
+_SLOPE_GENTLE_M: float = 5.0
+_SLOPE_STEEP_M: float = 15.0
+# Movement penalty factors for uphill slopes.
+_SLOPE_MODERATE_UPHILL: float = 1.20   # +20 % for moderate uphill
+_SLOPE_STEEP_UPHILL: float = 1.40      # +40 % for steep uphill
+_SLOPE_DOWNHILL: float = 0.90          # -10 % when going downhill
+
+# Combat elevation modifiers (per 10 m height advantage, capped).
+_ELEV_ADVANTAGE_PER_10M_RANGED: float = 0.05   # +5 % ranged damage
+_ELEV_ADVANTAGE_PER_10M_MELEE: float = 0.03    # +3 % melee defence
+_ELEV_COMBAT_CAP_M: float = 30.0               # cap effect at 30 m difference
+
 DEFAULT_TERRAIN_COSTS: dict[TerrainType, float] = {
     TerrainType.OPEN: 1.0,
     TerrainType.ROAD: 0.8,
@@ -206,12 +220,56 @@ class HexGridMap:
             return resolver.get(cell.terrain, math.inf)
         return resolver(coord, cell)
 
+    def movement_cost_between(
+        self,
+        from_coord: HexCoord,
+        to_coord: HexCoord,
+        resolver: TerrainCostResolver | None = None,
+    ) -> float:
+        """Return movement cost from *from_coord* to *to_coord*, including slope.
+
+        Adds a slope multiplier based on the elevation difference between the
+        two hexes on top of the destination's terrain cost.  Falls back to
+        :meth:`movement_cost` when elevation data is zero for both hexes.
+        """
+        base = self.movement_cost(to_coord, resolver)
+        if math.isinf(base):
+            return base
+        slope = elevation_movement_factor(
+            self.elevation_at(from_coord),
+            self.elevation_at(to_coord),
+        )
+        return base * slope
+
+    def elevation_combat_modifier(
+        self,
+        attacker_coord: HexCoord,
+        defender_coord: HexCoord,
+    ) -> tuple[float, float]:
+        """Return ``(ranged_mult, melee_def_mult)`` for the attacker.
+
+        When the attacker is higher than the defender, they gain a ranged bonus
+        and the defender gains a melee-defence bonus.  Both effects are capped
+        at :data:`_ELEV_COMBAT_CAP_M`.
+
+        Returns:
+            A tuple ``(ranged_mult, melee_def_mult)`` where both values are ≥0.
+            Values above 1.0 favour the attacker (ranged) or defender (melee).
+        """
+        diff = self.elevation_at(attacker_coord) - self.elevation_at(defender_coord)
+        capped = max(-_ELEV_COMBAT_CAP_M, min(_ELEV_COMBAT_CAP_M, diff))
+
+        ranged_mult = 1.0 + (capped / 10.0) * _ELEV_ADVANTAGE_PER_10M_RANGED
+        melee_def_mult = 1.0 + (abs(capped) / 10.0) * _ELEV_ADVANTAGE_PER_10M_MELEE
+        return max(0.0, ranged_mult), max(0.0, melee_def_mult)
+
     def find_path(
         self,
         start: HexCoord,
         goal: HexCoord,
         *,
         terrain_costs: TerrainCostResolver | None = None,
+        use_slope: bool = False,
     ) -> list[HexCoord]:
         if not self.in_bounds(start) or not self.in_bounds(goal):
             raise ValueError("Start and goal must both be within map bounds.")
@@ -230,7 +288,10 @@ class HexGridMap:
                 break
 
             for neighbor in self.neighbors(current, include_impassable=True):
-                step_cost = self.movement_cost(neighbor, terrain_costs)
+                if use_slope:
+                    step_cost = self.movement_cost_between(current, neighbor, terrain_costs)
+                else:
+                    step_cost = self.movement_cost(neighbor, terrain_costs)
                 if math.isinf(step_cost):
                     continue
 
@@ -282,6 +343,29 @@ class HexGridMap:
                 return False
 
         return True
+
+
+def elevation_movement_factor(from_elev: float, to_elev: float) -> float:
+    """Return a movement cost multiplier based on the elevation change.
+
+    Climbing costs more; descending costs slightly less.  Flat terrain
+    returns exactly 1.0.
+
+    Args:
+        from_elev: Elevation of the origin hex in metres.
+        to_elev: Elevation of the destination hex in metres.
+
+    Returns:
+        A positive float multiplier (e.g. 1.2 = 20 % more expensive).
+    """
+    diff = to_elev - from_elev
+    if diff > _SLOPE_STEEP_M:
+        return _SLOPE_STEEP_UPHILL
+    if diff > _SLOPE_GENTLE_M:
+        return _SLOPE_MODERATE_UPHILL
+    if diff < -_SLOPE_GENTLE_M:
+        return _SLOPE_DOWNHILL
+    return 1.0
 
 
 def _lerp(start: float, end: float, fraction: float) -> float:

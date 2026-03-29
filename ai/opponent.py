@@ -4,16 +4,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import random
+from typing import TYPE_CHECKING
 
 from core.game import GameState
+from core.map import HexCoord, TerrainType
 from core.orders import Order
 from core.units import Formation, MoraleState, Side, Unit, UnitType
 
+from .belief import BeliefMap
 from .difficulty import AIDifficulty, AIDifficultyProfile, get_difficulty_profile
 from .evaluation import BattlefieldEvaluator
 from .strategy import ObjectiveSelector
-from .tactics import TacticalPlanner
+from .tactics import ReserveManager, TacticalPlanner
 from .umpire import DigitalUmpire
+
+if TYPE_CHECKING:
+    from .mcts import MCTSPlanner
 
 
 @dataclass(slots=True)
@@ -24,14 +30,29 @@ class SimpleAICommander:
     evaluator: BattlefieldEvaluator = field(default_factory=BattlefieldEvaluator)
     strategy: ObjectiveSelector = field(default_factory=ObjectiveSelector)
     umpire: DigitalUmpire = field(default_factory=DigitalUmpire)
+    belief_map: BeliefMap = field(default_factory=BeliefMap)
     profile: AIDifficultyProfile = field(init=False)
     rng: random.Random = field(init=False)
     tactics: TacticalPlanner = field(init=False)
+    reserve_manager: ReserveManager = field(init=False)
+    mcts: MCTSPlanner | None = field(init=False)
 
     def __post_init__(self) -> None:
         self.profile = get_difficulty_profile(self.difficulty)
         self.rng = random.Random(self.seed)
         self.tactics = TacticalPlanner(self.rng)
+        self.reserve_manager = ReserveManager()
+        self.mcts = None
+        if self.profile.lookahead_depth > 0:
+            from .mcts import MCTSPlanner as _MCTSPlanner
+            n_sim = 20 if self.difficulty is AIDifficulty.MEDIUM else 40
+            self.mcts = _MCTSPlanner(
+                self.side,
+                self.evaluator,
+                lookahead_depth=self.profile.lookahead_depth,
+                n_simulations=n_sim,
+                rng=self.rng,
+            )
 
     def issue_orders(self, game: GameState) -> list[Order]:
         issued: list[Order] = []
@@ -42,11 +63,38 @@ class SimpleAICommander:
             if unit_id in game.units
         ]
 
-        for unit in self._active_units(game):
+        if self.profile.use_belief_map:
+            self.belief_map.update(visibility, game.current_turn)
+
+        active_units = self._active_units(game)
+
+        focus_assignments: dict[str, Unit] = {}
+        if self.profile.use_focus_fire and visible_enemies:
+            non_cmdr = [u for u in active_units if u.unit_type is not UnitType.COMMANDER]
+            focus_assignments = self.tactics.assign_targets(non_cmdr, visible_enemies, self.evaluator)
+
+        for unit in active_units:
             if unit.unit_type is UnitType.COMMANDER:
                 continue
 
-            order = self._choose_order(game, unit, visible_enemies, visibility.last_known_enemies)
+            # D6: Reserve management for infantry (use_focus_fire reused as advanced-tactics gate)
+            if self.profile.use_focus_fire and unit.unit_type is UnitType.INFANTRY:
+                if not self.reserve_manager.should_commit(unit, game, active_units):
+                    reserve_pos = self.reserve_manager.reserve_position(unit, game)
+                    if reserve_pos is not None:
+                        destination = self.tactics.choose_approach_destination(
+                            game, unit, reserve_pos
+                        )
+                        order = game.order_book.issue_move(
+                            unit.id,
+                            destination,
+                            current_turn=game.current_turn,
+                            priority=50,
+                        )
+                        issued.append(self.umpire.sanitize_order(game, order))
+                        continue
+
+            order = self._choose_order(game, unit, visible_enemies, visibility.last_known_enemies, focus_assignments)
             if order is None:
                 continue
             issued.append(self.umpire.sanitize_order(game, order))
@@ -60,12 +108,38 @@ class SimpleAICommander:
         ]
         return sorted(units, key=lambda unit: (unit.unit_type.value, unit.id))
 
-    def _choose_order(self, game: GameState, unit: Unit, visible_enemies, last_known) -> Order | None:
+    def _choose_order(
+        self,
+        game: GameState,
+        unit: Unit,
+        visible_enemies: list[Unit],
+        last_known,
+        focus_assignments: dict[str, Unit] | None = None,
+    ) -> Order | None:
         if unit.morale_state in {MoraleState.ROUTING, MoraleState.BROKEN} or unit.casualty_ratio >= self.profile.retreat_threshold:
-            destination = self.tactics.choose_retreat_destination(game, unit)
+            destination = self.tactics.choose_retreat_destination(
+                unit, game.battle_map, self.evaluator, visible_enemies
+            )
             return game.order_book.issue_retreat(unit.id, destination, current_turn=game.current_turn, priority=20)
 
-        target = self.evaluator.best_target(game, unit, visible_enemies)
+        # Get target: use focus-fire assignment when available, else best_target
+        if focus_assignments and unit.id in focus_assignments:
+            target = focus_assignments[unit.id]
+        else:
+            target = self.evaluator.best_target(unit, visible_enemies)
+
+        # D8: Infantry vs steady fortified enemy — only attack if 3:1 advantage
+        if (
+            target is not None
+            and unit.unit_type is UnitType.INFANTRY
+            and target.morale_state is MoraleState.STEADY
+            and target.position is not None
+            and game.battle_map.terrain_at(target.position) is TerrainType.FORTIFICATION
+            and unit.current_strength < 3 * target.current_strength
+        ):
+            other_targets = [e for e in visible_enemies if e is not target]
+            target = self.evaluator.best_target(unit, other_targets) if other_targets else None
+
         if target is not None:
             distance = unit.position.distance_to(target.position)
             if distance <= game.combat_resolver.max_range(unit) or distance <= 1:
@@ -91,13 +165,55 @@ class SimpleAICommander:
                     priority=15,
                 )
 
-            destination = self.tactics.choose_approach_destination(game, unit, target.position)
+            # Role-specific approach destination
+            approach_dest = target.position
+            if self.profile.use_flanking and unit.unit_type is UnitType.CAVALRY:
+                flank = self.tactics.cavalry_flanking_destination(unit, visible_enemies, game.battle_map)
+                if flank is not None:
+                    approach_dest = flank
+            elif self.profile.use_terrain_scoring and unit.unit_type is UnitType.ARTILLERY:
+                arty = self.tactics.artillery_deployment_hex(unit, game.battle_map, visible_enemies)
+                if arty is not None:
+                    approach_dest = arty
+            elif unit.unit_type is UnitType.SKIRMISHER:
+                skr = self.tactics.skirmisher_harassment_hex(unit, visible_enemies, game.battle_map)
+                if skr is not None:
+                    approach_dest = skr
+
+            # D5: MCTS refinement for ARTILLERY/CAVALRY
+            if self.mcts is not None and unit.unit_type in {UnitType.ARTILLERY, UnitType.CAVALRY}:
+                candidates: list[HexCoord] = [approach_dest]
+                candidates += game.battle_map.neighbors(unit.position)[:3]
+                # Deduplicate while preserving order
+                seen: set[tuple[int, int]] = set()
+                unique: list[HexCoord] = []
+                for c in candidates:
+                    key = (c.q, c.r)
+                    if key not in seen:
+                        seen.add(key)
+                        unique.append(c)
+                best = self.mcts.best_move_destination(game, unit.id, unique)
+                if best is not None:
+                    approach_dest = best
+
+            destination = self.tactics.choose_approach_destination(game, unit, approach_dest)
             return game.order_book.issue_move(unit.id, destination, current_turn=game.current_turn, priority=30)
 
         if last_known:
             remembered = min(last_known.values(), key=lambda item: unit.position.distance_to(item.position))
             destination = self.tactics.choose_approach_destination(game, unit, remembered.position)
             return game.order_book.issue_move(unit.id, destination, current_turn=game.current_turn, priority=40)
+
+        # D10: Belief map fallback when no visible/known enemies
+        if self.profile.use_belief_map:
+            estimated = self.belief_map.estimated_enemies(min_confidence=0.2)
+            if estimated:
+                best_belief = estimated[0]
+                dest = best_belief.estimated_pos
+                if not game.battle_map.in_bounds(dest):
+                    dest = best_belief.last_known_pos
+                destination = self.tactics.choose_approach_destination(game, unit, dest)
+                return game.order_book.issue_move(unit.id, destination, current_turn=game.current_turn, priority=45)
 
         objective = self.strategy.choose_focus_objective(game, self.side, unit)
         if objective is not None:
@@ -109,3 +225,4 @@ class SimpleAICommander:
             return game.order_book.issue_move(unit.id, destination, current_turn=game.current_turn, priority=50)
 
         return game.order_book.issue_hold(unit.id, current_turn=game.current_turn, priority=60)
+

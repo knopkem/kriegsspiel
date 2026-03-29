@@ -16,6 +16,7 @@ from .units import (
     make_commander,
     make_infantry_half_battalion,
     make_skirmisher_detachment,
+    make_supply_wagon,
 )
 
 
@@ -39,6 +40,7 @@ class Scenario:
     units: tuple[dict, ...]
     objectives: tuple[ScenarioObjective, ...]
     starting_turn: int = 1
+    reinforcements: tuple[dict, ...] = ()
 
     def build_map(self) -> HexGridMap:
         return HexGridMap.from_terrain_rows(self.map_rows)
@@ -50,6 +52,7 @@ class Scenario:
             "artillery": make_artillery_battery,
             "skirmisher": make_skirmisher_detachment,
             "commander": make_commander,
+            "supply_wagon": make_supply_wagon,
         }
         built: dict[str, Unit] = {}
         for unit_spec in self.units:
@@ -83,6 +86,7 @@ def load_scenario(path: Path) -> Scenario:
             for item in raw["objectives"]
         ),
         starting_turn=raw.get("starting_turn", 1),
+        reinforcements=tuple(raw.get("reinforcements", [])),
     )
 
 

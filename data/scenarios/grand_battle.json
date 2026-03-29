@@ -1,0 +1,322 @@
+{
+  "scenario_id": "grand_battle",
+  "title": "Grand Battle",
+  "description": "A massive engagement with multiple corps, river crossings, fortifications, and eight objectives.",
+  "map_rows": [
+    "..................................hhhhhhhhhhhhhhhhhhhhhhh...",
+    "..................................hhhhhhhhhhhhhhhhhhhhhhh...",
+    "..................................hhhhhhhhhhhhhhhhhhhhhhh...",
+    "...........................w......hhhhhhhhhhhhhhhhhhhhhhh...",
+    "...........................w......hhhhhhhhhhhhhhhhhhhhhhh...",
+    "...........................w......hhhhhhhhhhhhhhhhhh#hhhh...",
+    "..........fffffffff........w......hhhhhhhhhhhhhhhhhhhhhhh...",
+    "..........fffffffff........w......hhhhhhhhhhhhhhhhhhhhhhh...",
+    ".....v....fffffffff........w......hhhhhhhhhhhhhhhhhhhhhhh...",
+    "..........fffffffff........w......hhhhhhhhhhhhhhhhhhhhhhh...",
+    "..........fffffffff........w......hhhhhhhhhhhhhhhhhhhvhhh...",
+    "..........fffffffff........w........ffffffffff..............",
+    "rrhhhhhhhrfffffffffrrrrrrrrwrrrrrrrrffffffffffrrrrrrrrrrrrrr",
+    "..hhhhhhh.fffffffff........w........ffffffffff..............",
+    "..hhhhhhh.fffffffff........w........ffffffffff..............",
+    "..hhhhhhh.fffffffff........w........ffffffffff..............",
+    "..hhhhhhh..................w........ffffffffff..............",
+    "..hhhhhhh..................w................................",
+    "..hhhhhhh..................w................................",
+    "..hhhhhhh..................w................................",
+    "..hhhhhhh..................w................................",
+    "...........................w................................",
+    "...wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww...",
+    "...........................w................................",
+    "...........................w................................",
+    "...mmmmmmmmfffffffff.......w.....................mmmmmmmm...",
+    "...mmmmmmmmfffffffff.......w..........ffffffffff.mmmmmmmm...",
+    "...mmmmmmmmfffffffff.......w..........ffffffffff.mmmmmmmm...",
+    "...mmmmmmmmfffffffff.......w..........ffffffffff.mmmmmmmm...",
+    "...mmmmmmmmfffffffff.......w..........ffffffffff.mmmmmmmm...",
+    "...mmmmmmmmfffffffff.......w..........ffffffffff.mmmmmmmm...",
+    "...mmmmmmmmfffffffff.......w..........ffffffffff.mmmmmmmm...",
+    "rrrrrrrrrrrfffffffffrrrrrrrwrrrrrrrr..ffffffffff............",
+    "...........fffffffff.......whhhhhhhhhhhhhhhhhhhf............",
+    "...........fffffffff.......whhhhhhhhhhhhhhhhhhhf............",
+    "...........................whhhhhhhhhhhhhhhhhhhf............",
+    "......v....................whhhhhhhhhhhhhhhhhhh.............",
+    "...........................whhhhhhhhhhhhhhhhhhh.............",
+    "...........................whhhhhhhhhhhhhhhhhhh.......v.....",
+    ".......#...................whhhhhhhhhhhhhhhhhhh.............",
+    "...........................whhhhhhhhhhhhhhhhhhh.............",
+    "...........................whhhhhhhhhhhhhhhhhhh.............",
+    "............................hhhhhhhhhhhhhhhhhhh.............",
+    "............................hhhhhhhhhhhhhhhhhhh.............",
+    "............................................................"
+  ],
+  "units": [
+    {
+      "id": "blue-inf-1",
+      "name": "1st Corps Left",
+      "side": "blue",
+      "type": "infantry",
+      "position": [
+        2,
+        12
+      ]
+    },
+    {
+      "id": "blue-inf-2",
+      "name": "1st Corps Right",
+      "side": "blue",
+      "type": "infantry",
+      "position": [
+        2,
+        32
+      ]
+    },
+    {
+      "id": "blue-inf-3",
+      "name": "2nd Corps",
+      "side": "blue",
+      "type": "infantry",
+      "position": [
+        0,
+        22
+      ]
+    },
+    {
+      "id": "blue-cav-1",
+      "name": "Blue Guard Cavalry",
+      "side": "blue",
+      "type": "cavalry",
+      "position": [
+        0,
+        17
+      ]
+    },
+    {
+      "id": "blue-cav-2",
+      "name": "Blue Hussars",
+      "side": "blue",
+      "type": "cavalry",
+      "position": [
+        0,
+        27
+      ]
+    },
+    {
+      "id": "blue-gun-1",
+      "name": "1st Foot Battery",
+      "side": "blue",
+      "type": "artillery",
+      "position": [
+        0,
+        12
+      ]
+    },
+    {
+      "id": "blue-gun-2",
+      "name": "2nd Foot Battery",
+      "side": "blue",
+      "type": "artillery",
+      "position": [
+        0,
+        32
+      ]
+    },
+    {
+      "id": "blue-skr-1",
+      "name": "Blue Jaegers",
+      "side": "blue",
+      "type": "skirmisher",
+      "position": [
+        4,
+        9
+      ]
+    },
+    {
+      "id": "blue-skr-2",
+      "name": "Blue Rifles",
+      "side": "blue",
+      "type": "skirmisher",
+      "position": [
+        4,
+        35
+      ]
+    },
+    {
+      "id": "blue-hq",
+      "name": "Field Marshal Braun",
+      "side": "blue",
+      "type": "commander",
+      "position": [
+        1,
+        22
+      ],
+      "command_radius": 9
+    },
+    {
+      "id": "red-inf-1",
+      "name": "3rd Corps Left",
+      "side": "red",
+      "type": "infantry",
+      "position": [
+        57,
+        12
+      ]
+    },
+    {
+      "id": "red-inf-2",
+      "name": "3rd Corps Right",
+      "side": "red",
+      "type": "infantry",
+      "position": [
+        57,
+        32
+      ]
+    },
+    {
+      "id": "red-inf-3",
+      "name": "4th Corps",
+      "side": "red",
+      "type": "infantry",
+      "position": [
+        59,
+        22
+      ]
+    },
+    {
+      "id": "red-cav-1",
+      "name": "Red Guard Cavalry",
+      "side": "red",
+      "type": "cavalry",
+      "position": [
+        59,
+        17
+      ]
+    },
+    {
+      "id": "red-cav-2",
+      "name": "Red Cuirassiers",
+      "side": "red",
+      "type": "cavalry",
+      "position": [
+        59,
+        27
+      ]
+    },
+    {
+      "id": "red-gun-1",
+      "name": "3rd Foot Battery",
+      "side": "red",
+      "type": "artillery",
+      "position": [
+        59,
+        12
+      ]
+    },
+    {
+      "id": "red-gun-2",
+      "name": "4th Foot Battery",
+      "side": "red",
+      "type": "artillery",
+      "position": [
+        59,
+        32
+      ]
+    },
+    {
+      "id": "red-skr-1",
+      "name": "Red Jaegers",
+      "side": "red",
+      "type": "skirmisher",
+      "position": [
+        55,
+        9
+      ]
+    },
+    {
+      "id": "red-skr-2",
+      "name": "Red Rifles",
+      "side": "red",
+      "type": "skirmisher",
+      "position": [
+        55,
+        35
+      ]
+    },
+    {
+      "id": "red-hq",
+      "name": "Field Marshal Richter",
+      "side": "red",
+      "type": "commander",
+      "position": [
+        58,
+        22
+      ],
+      "command_radius": 9
+    }
+  ],
+  "objectives": [
+    {
+      "id": "north_ford",
+      "label": "North Ford",
+      "position": [
+        26,
+        12
+      ],
+      "points": 3
+    },
+    {
+      "id": "central_bridge",
+      "label": "Central Bridge",
+      "position": [
+        26,
+        22
+      ],
+      "points": 6
+    },
+    {
+      "id": "south_ford",
+      "label": "South Ford",
+      "position": [
+        26,
+        32
+      ],
+      "points": 3
+    },
+    {
+      "id": "fort_ridge_a",
+      "label": "Fort Ridge A",
+      "position": [
+        52,
+        5
+      ],
+      "points": 4
+    },
+    {
+      "id": "fort_ridge_b",
+      "label": "Fort Ridge B",
+      "position": [
+        7,
+        39
+      ],
+      "points": 4
+    },
+    {
+      "id": "village_ne",
+      "label": "North Village",
+      "position": [
+        53,
+        10
+      ],
+      "points": 2
+    },
+    {
+      "id": "village_sw",
+      "label": "South Village",
+      "position": [
+        6,
+        36
+      ],
+      "points": 2
+    }
+  ],
+  "starting_turn": 1
+}

@@ -1,29 +1,166 @@
 {
   "scenario_id": "assault_on_hill",
   "title": "Assault on the Ridge",
-  "description": "An attacker-defender scenario focused on hills, artillery, and defensive positions.",
+  "description": "Blue attacks a heavily fortified hill line defended by Red. A river crossing must be forced.",
   "map_rows": [
-    "...hhh....",
-    "..hhhhh...",
-    ".rrhhhrr..",
-    "..hfffh...",
-    "...hvh....",
-    "....w.....",
-    "....v....."
+    ".....................hhhhhhhhhhhhhh",
+    ".....................hhhhhhhhhhhhhh",
+    ".....................hhhhhhhhhhhhhh",
+    ".......ffffffff......hhhhhhhhhhhhhh",
+    ".......ffffffff......hhhhhhhhhhhhhh",
+    ".......ffffffffw.....hhhhhhhhhhhhhh",
+    ".......ffffffffw.....hhhhhhhhhhhhhh",
+    ".......ffffffffw.....hhhhhhhhhhhhhh",
+    ".......ffffffffw.....hhhhhhhhhhhhhh",
+    ".......ffffffffw.....hhhhhhhhhhhhhh",
+    ".......ffffffffw.....hhhhhhhhhhhhhh",
+    "...............w.....hhhhhhhhhhhhhh",
+    "...rrrrrrrrrrrrwrrrrrhhhhhhhhh#hhhh",
+    "...............w.....hhhhhhhhhhhhhh",
+    "........fffffffw.....hhhhhhhhhhhhhh",
+    "........fffffffw.....hhhhhhhhhhhhhh",
+    "........fffffffw.....hhhhhhhhhhhhhh",
+    "........fffffffw.....hhhhhhhhhhhhhh",
+    "........fffffffw.....hhhhhhhhhhhhhh",
+    "........fffffffw.....hhhhhhhhhhhhhh",
+    "........fffffffw.....hhhhhhhhhhhhhh",
+    "........fffffff......hhhhhhhhhhhhhh",
+    ".....................hhhhhhhhhhhhhh",
+    ".....................hhhhhhhhhhhhhh",
+    ".....................hhhhhhhhhhhhhh"
   ],
   "units": [
-    { "id": "blue-inf-1", "name": "4th Line Battalion", "side": "blue", "type": "infantry", "position": [1, 4] },
-    { "id": "blue-inf-2", "name": "5th Line Battalion", "side": "blue", "type": "infantry", "position": [2, 5] },
-    { "id": "blue-gun-1", "name": "Blue Battery", "side": "blue", "type": "artillery", "position": [0, 5] },
-    { "id": "blue-hq", "name": "Col. Stein", "side": "blue", "type": "commander", "position": [1, 6], "command_radius": 5 },
-    { "id": "red-inf-1", "name": "Ridge Guard", "side": "red", "type": "infantry", "position": [5, 1] },
-    { "id": "red-inf-2", "name": "Reserve Grenadiers", "side": "red", "type": "infantry", "position": [6, 2] },
-    { "id": "red-gun-1", "name": "Red Battery", "side": "red", "type": "artillery", "position": [4, 0] },
-    { "id": "red-hq", "name": "Maj. Vogel", "side": "red", "type": "commander", "position": [7, 1], "command_radius": 5 }
+    {
+      "id": "blue-inf-1",
+      "name": "4th Line Battalion",
+      "side": "blue",
+      "type": "infantry",
+      "position": [
+        1,
+        10
+      ]
+    },
+    {
+      "id": "blue-inf-2",
+      "name": "5th Line Battalion",
+      "side": "blue",
+      "type": "infantry",
+      "position": [
+        2,
+        14
+      ]
+    },
+    {
+      "id": "blue-cav-1",
+      "name": "Blue Hussars",
+      "side": "blue",
+      "type": "cavalry",
+      "position": [
+        3,
+        6
+      ]
+    },
+    {
+      "id": "blue-gun-1",
+      "name": "Blue Battery",
+      "side": "blue",
+      "type": "artillery",
+      "position": [
+        0,
+        12
+      ]
+    },
+    {
+      "id": "blue-hq",
+      "name": "Col. Stein",
+      "side": "blue",
+      "type": "commander",
+      "position": [
+        1,
+        18
+      ],
+      "command_radius": 5
+    },
+    {
+      "id": "red-inf-1",
+      "name": "Ridge Guard",
+      "side": "red",
+      "type": "infantry",
+      "position": [
+        26,
+        8
+      ]
+    },
+    {
+      "id": "red-inf-2",
+      "name": "Reserve Grenadiers",
+      "side": "red",
+      "type": "infantry",
+      "position": [
+        27,
+        16
+      ]
+    },
+    {
+      "id": "red-cav-1",
+      "name": "Red Dragoons",
+      "side": "red",
+      "type": "cavalry",
+      "position": [
+        29,
+        5
+      ]
+    },
+    {
+      "id": "red-gun-1",
+      "name": "Red Battery",
+      "side": "red",
+      "type": "artillery",
+      "position": [
+        25,
+        2
+      ]
+    },
+    {
+      "id": "red-hq",
+      "name": "Maj. Vogel",
+      "side": "red",
+      "type": "commander",
+      "position": [
+        33,
+        12
+      ],
+      "command_radius": 5
+    }
   ],
   "objectives": [
-    { "id": "ridge", "label": "Main Ridge", "position": [4, 1], "points": 4 },
-    { "id": "hamlet", "label": "Hamlet", "position": [4, 4], "points": 2 }
+    {
+      "id": "left_approach",
+      "label": "West Approach",
+      "position": [
+        5,
+        12
+      ],
+      "points": 2
+    },
+    {
+      "id": "central_ford",
+      "label": "Central Ford",
+      "position": [
+        18,
+        12
+      ],
+      "points": 3
+    },
+    {
+      "id": "fort_hill",
+      "label": "Fortified Hill",
+      "position": [
+        30,
+        12
+      ],
+      "points": 5
+    }
   ],
   "starting_turn": 1
 }

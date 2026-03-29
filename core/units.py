@@ -22,6 +22,7 @@ class UnitType(StrEnum):
     ARTILLERY = "artillery"
     SKIRMISHER = "skirmisher"
     COMMANDER = "commander"
+    SUPPLY_WAGON = "supply_wagon"
 
 
 class Formation(StrEnum):
@@ -46,6 +47,21 @@ class FatigueLevel(StrEnum):
     TIRED = "tired"
     WEARY = "weary"
     EXHAUSTED = "exhausted"
+
+
+class FacingDirection(StrEnum):
+    N = "N"
+    NE = "NE"
+    SE = "SE"
+    S = "S"
+    SW = "SW"
+    NW = "NW"
+
+
+class CommanderAbility(StrEnum):
+    FORCED_MARCH = "forced_march"
+    INSPIRE = "inspire"
+    LAST_STAND = "last_stand"
 
 
 class InfantryExchangeState(StrEnum):
@@ -95,6 +111,13 @@ class Unit:
     commander_radius: int = 0
     hit_points: int | None = None
     tags: set[str] = field(default_factory=set)
+    facing: FacingDirection = FacingDirection.S
+    consecutive_hold_turns: int = 0
+    ammo: int = 0
+    max_ammo: int = 0
+    commander_ability_uses: int = 0
+    last_stand_active: bool = False
+    charged: bool = False
 
     def __post_init__(self) -> None:
         if self.max_strength <= 0:
@@ -248,6 +271,43 @@ class Unit:
                 continue
             costs[terrain] = max(DEFAULT_TERRAIN_COSTS.get(terrain, 1.0), best / allowance)
         return costs
+
+    @property
+    def is_entrenched(self) -> bool:
+        return self.consecutive_hold_turns >= 2
+
+    def change_facing(self, new_facing: FacingDirection) -> None:
+        self.facing = new_facing
+        self.add_fatigue(1)
+
+    def is_flank_attack_from(self, attacker_pos: HexCoord) -> bool:
+        """True if attacker is in the rear 180° arc relative to facing."""
+        if self.position is None or attacker_pos == self.position:
+            return False
+        dq = attacker_pos.q - self.position.q
+        dr = attacker_pos.r - self.position.r
+        front_map = {
+            FacingDirection.NE: (1, -1), FacingDirection.N: (0, -1),
+            FacingDirection.NW: (-1, 0), FacingDirection.SW: (-1, 1),
+            FacingDirection.S: (0, 1), FacingDirection.SE: (1, 0),
+        }
+        front_dq, front_dr = front_map[self.facing]
+        dot = dq * front_dq + dr * front_dr
+        return dot < 0
+
+    def consume_ammo(self, rounds: int) -> bool:
+        """Returns True if ammo was consumed, False if out. max_ammo==0 means unlimited."""
+        if self.max_ammo == 0:
+            return True
+        if self.ammo < rounds:
+            return False
+        self.ammo -= rounds
+        return True
+
+    def resupply_ammo(self, rounds: int) -> None:
+        if self.max_ammo == 0:
+            return
+        self.ammo = min(self.max_ammo, self.ammo + rounds)
 
     def degrade_morale(self, steps: int = 1) -> MoraleState:
         if steps < 0:
@@ -407,6 +467,43 @@ COMMANDER_MOVEMENT = MovementProfile(
 )
 
 
+SUPPLY_WAGON_MOVEMENT = MovementProfile(
+    allowances={
+        Formation.COLUMN: {
+            TerrainType.OPEN: 200,
+            TerrainType.ROAD: 250,
+            TerrainType.FOREST: 50,
+            TerrainType.HILL: 100,
+            TerrainType.RIVER: 0,
+            TerrainType.VILLAGE: 100,
+            TerrainType.MARSH: 25,
+            TerrainType.FORTIFICATION: 100,
+        },
+    },
+    default_formation=Formation.COLUMN,
+)
+
+
+def make_supply_wagon(
+    unit_id: str,
+    name: str,
+    side: Side,
+    *,
+    position: HexCoord | None = None,
+) -> Unit:
+    return Unit(
+        id=unit_id,
+        name=name,
+        side=side,
+        unit_type=UnitType.SUPPLY_WAGON,
+        max_strength=10,
+        max_hit_points=80,
+        movement_profile=SUPPLY_WAGON_MOVEMENT,
+        position=position,
+        formation=Formation.COLUMN,
+    )
+
+
 def make_infantry_half_battalion(
     unit_id: str,
     name: str,
@@ -424,6 +521,8 @@ def make_infantry_half_battalion(
         movement_profile=INFANTRY_MOVEMENT,
         position=position,
         formation=Formation.COLUMN,
+        ammo=60,
+        max_ammo=60,
     )
 
 
@@ -464,6 +563,8 @@ def make_artillery_battery(
         movement_profile=ARTILLERY_MOVEMENT,
         position=position,
         formation=Formation.LIMBERED,
+        ammo=40,
+        max_ammo=40,
     )
 
 
@@ -484,6 +585,8 @@ def make_skirmisher_detachment(
         movement_profile=SKIRMISHER_MOVEMENT,
         position=position,
         formation=Formation.SKIRMISH,
+        ammo=30,
+        max_ammo=30,
     )
 
 
@@ -506,4 +609,5 @@ def make_commander(
         position=position,
         formation=Formation.STAFF,
         commander_radius=command_radius,
+        commander_ability_uses=2,
     )

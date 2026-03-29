@@ -61,14 +61,17 @@ class CombatResolver:
         *,
         distance_hexes: int,
         defender_terrain: TerrainType,
+        last_stand: bool = False,
+        artillery_effectiveness_modifier: float = 1.0,
     ) -> CombatResult:
         if distance_hexes <= 1:
-            return self.resolve_melee(attacker, defender, defender_terrain=defender_terrain)
+            return self.resolve_melee(attacker, defender, defender_terrain=defender_terrain, last_stand=last_stand)
         return self.resolve_ranged(
             attacker,
             defender,
             distance_hexes=distance_hexes,
             defender_terrain=defender_terrain,
+            artillery_effectiveness_modifier=artillery_effectiveness_modifier,
         )
 
     def resolve_ranged(
@@ -78,7 +81,29 @@ class CombatResolver:
         *,
         distance_hexes: int,
         defender_terrain: TerrainType,
+        artillery_effectiveness_modifier: float = 1.0,
     ) -> CombatResult:
+        rounds_per_volley = {
+            UnitType.INFANTRY: 3,
+            UnitType.ARTILLERY: 5,
+            UnitType.SKIRMISHER: 2,
+        }.get(attacker.unit_type, 1)
+        if not attacker.consume_ammo(rounds_per_volley):
+            return CombatResult(
+                attack_kind=AttackKind.RANGED,
+                attacker_id=attacker.id,
+                defender_id=defender.id,
+                attacker_damage=0,
+                defender_damage=0,
+                attacker_morale=attacker.morale_state,
+                defender_morale=defender.morale_state,
+                attacker_fatigue=attacker.fatigue,
+                defender_fatigue=defender.fatigue,
+                die_id=DieId.I,
+                die_face_index=0,
+                summary=f"{attacker.name} is out of ammunition.",
+            )
+
         if distance_hexes > self.max_range(attacker):
             raise ValueError("Target is out of range for the attacker's unit type.")
 
@@ -89,6 +114,17 @@ class CombatResolver:
 
         attack_power = base_damage * die_roll.multiplier * attacker.combat_effectiveness
         defense = self._ranged_defense_multiplier(defender, defender_terrain)
+
+        if (
+            attacker.position is not None
+            and defender.position is not None
+            and defender.is_flank_attack_from(attacker.position)
+        ):
+            defense *= 0.85
+
+        if attacker.unit_type is UnitType.ARTILLERY:
+            attack_power *= artillery_effectiveness_modifier
+
         damage = max(0, round(attack_power / defense))
         applied_damage = defender.apply_damage(damage)
 
@@ -122,6 +158,7 @@ class CombatResolver:
         defender: Unit,
         *,
         defender_terrain: TerrainType,
+        last_stand: bool = False,
     ) -> CombatResult:
         odds_key, die_id = self._melee_profile(attacker, defender)
         base_damage = self.tables.melee_tables[odds_key]
@@ -129,6 +166,21 @@ class CombatResolver:
 
         attacker_power = base_damage * die_roll.multiplier * attacker.combat_effectiveness
         defender_power = (base_damage * 0.8) * defender.combat_effectiveness
+
+        if (
+            attacker.position is not None
+            and defender.position is not None
+            and defender.is_flank_attack_from(attacker.position)
+        ):
+            attacker_power *= 1.25
+
+        if attacker.charged:
+            attacker_power *= 1.3
+
+        if defender.is_entrenched:
+            attacker_power /= 1.15
+        if last_stand:
+            attacker_power /= 1.5
 
         attacker_damage = self._calculate_melee_damage(
             attack_power=defender_power,
@@ -205,7 +257,10 @@ class CombatResolver:
     def _ranged_defense_multiplier(self, defender: Unit, terrain: TerrainType) -> float:
         terrain_modifier = self.tables.terrain_fire_defense[terrain.value]
         formation_modifier = self.tables.formation_modifiers["ranged"].get(defender.formation.value, 1.0)
-        return terrain_modifier * formation_modifier
+        result = terrain_modifier * formation_modifier
+        if defender.is_entrenched:
+            result *= 1.25
+        return result
 
     def _calculate_melee_damage(
         self,

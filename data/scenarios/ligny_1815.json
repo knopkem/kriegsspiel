@@ -1,0 +1,311 @@
+{
+  "scenario_id": "ligny_1815",
+  "title": "Battle of Ligny (16 June 1815)",
+  "description": "Napoleon strikes the Prussian army under Blücher before it can unite with Wellington. French forces (RED) must cross the Ligny stream and seize the key villages, while the Prussians (BLUE) defend their positions along the stream.",
+  "map_rows": [
+    "..................................................",
+    "hhhhh.............................................",
+    "hhhhhh............................................",
+    "hhhfff............................................",
+    "...fff............................................",
+    "..fff.......r............r........................",
+    "..fff.......r............r........................",
+    "............r............r..............hhhhh.....",
+    "............r............r..............hhhhh.....",
+    "............r............r.vv...........hhhhh.....",
+    "............r............r.vv...........hhhhh.....",
+    "............r............r..............hhhhh.....",
+    "............r............r....ffffff....hhhhh.....",
+    "............r............r....ffffff....hhhhh.....",
+    "............r............r....ffffff....hhhhh.....",
+    "............r............r......ffff....hhhhhh....",
+    "............r............r......ffff....hhhhhh....",
+    "............r............r........................",
+    "............r............r........................",
+    "wwwwwwwwwvvvrwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+    "wwwwwwwwwwwwrwwwwwwwwwwwvvvwwwwwwwwwwwwwwwwwwwwwww",
+    "wwwwwwwwwwwwrwwwwwwwwwwwwrwwwwwwwwwwwwwwwwwwwwwwww",
+    "............r............r........................",
+    "............r............r........................",
+    "............r............r........................",
+    "............r............r........................",
+    "...hhhhh....r............r........................",
+    "...hhhhh....r............r........................",
+    "............r............r............ffffff......",
+    "............r............r............ffffff......",
+    "............r............r............ffffff......",
+    "............r............r............ffffff......",
+    "............r............r............ffffff......",
+    "............r............r............ffffff......",
+    "............r............r........................",
+    "............r............r........................",
+    "..................................................",
+    "..................................................",
+    "..................................................",
+    ".................................................."
+  ],
+  "units": [
+    {
+      "id": "blue-inf-1",
+      "name": "I. Westfälisches Bn.",
+      "side": "blue",
+      "type": "infantry",
+      "position": [
+        8,
+        23
+      ]
+    },
+    {
+      "id": "blue-inf-2",
+      "name": "II. Westfälisches Bn.",
+      "side": "blue",
+      "type": "infantry",
+      "position": [
+        20,
+        24
+      ]
+    },
+    {
+      "id": "blue-inf-3",
+      "name": "III. Rheinisches Bn.",
+      "side": "blue",
+      "type": "infantry",
+      "position": [
+        30,
+        25
+      ]
+    },
+    {
+      "id": "blue-inf-4",
+      "name": "Ligny Garrison Bn.",
+      "side": "blue",
+      "type": "infantry",
+      "position": [
+        25,
+        23
+      ]
+    },
+    {
+      "id": "blue-inf-5",
+      "name": "Reserve Bataillon",
+      "side": "blue",
+      "type": "infantry",
+      "position": [
+        14,
+        28
+      ]
+    },
+    {
+      "id": "blue-cav-1",
+      "name": "Hussaren-Regiment",
+      "side": "blue",
+      "type": "cavalry",
+      "position": [
+        18,
+        30
+      ]
+    },
+    {
+      "id": "blue-cav-2",
+      "name": "Ulanen-Regiment",
+      "side": "blue",
+      "type": "cavalry",
+      "position": [
+        35,
+        30
+      ]
+    },
+    {
+      "id": "blue-art-1",
+      "name": "Reitende Artillerie",
+      "side": "blue",
+      "type": "artillery",
+      "position": [
+        23,
+        28
+      ]
+    },
+    {
+      "id": "blue-skm-1",
+      "name": "Schlesische Jäger",
+      "side": "blue",
+      "type": "skirmisher",
+      "position": [
+        8,
+        22
+      ]
+    },
+    {
+      "id": "blue-skm-2",
+      "name": "Brandenburgische Jäger",
+      "side": "blue",
+      "type": "skirmisher",
+      "position": [
+        22,
+        22
+      ]
+    },
+    {
+      "id": "blue-cmd-1",
+      "name": "Blücher",
+      "side": "blue",
+      "type": "commander",
+      "position": [
+        24,
+        26
+      ],
+      "command_radius": 6
+    },
+    {
+      "id": "red-inf-1",
+      "name": "45e Régiment de Ligne",
+      "side": "red",
+      "type": "infantry",
+      "position": [
+        8,
+        7
+      ]
+    },
+    {
+      "id": "red-inf-2",
+      "name": "54e Régiment de Ligne",
+      "side": "red",
+      "type": "infantry",
+      "position": [
+        15,
+        6
+      ]
+    },
+    {
+      "id": "red-inf-3",
+      "name": "21e Régiment de Ligne",
+      "side": "red",
+      "type": "infantry",
+      "position": [
+        28,
+        7
+      ]
+    },
+    {
+      "id": "red-inf-4",
+      "name": "59e Régiment de Ligne",
+      "side": "red",
+      "type": "infantry",
+      "position": [
+        38,
+        8
+      ]
+    },
+    {
+      "id": "red-inf-5",
+      "name": "62e Régiment de Ligne",
+      "side": "red",
+      "type": "infantry",
+      "position": [
+        5,
+        5
+      ]
+    },
+    {
+      "id": "red-inf-6",
+      "name": "Grenadiers de la Garde",
+      "side": "red",
+      "type": "infantry",
+      "position": [
+        22,
+        11
+      ]
+    },
+    {
+      "id": "red-cav-1",
+      "name": "4e Chasseurs à Cheval",
+      "side": "red",
+      "type": "cavalry",
+      "position": [
+        42,
+        6
+      ]
+    },
+    {
+      "id": "red-cav-2",
+      "name": "Cuirassiers (Réserve)",
+      "side": "red",
+      "type": "cavalry",
+      "position": [
+        32,
+        4
+      ]
+    },
+    {
+      "id": "red-art-1",
+      "name": "Grande Batterie",
+      "side": "red",
+      "type": "artillery",
+      "position": [
+        20,
+        3
+      ]
+    },
+    {
+      "id": "red-skm-1",
+      "name": "Voltigeurs d'avant-garde",
+      "side": "red",
+      "type": "skirmisher",
+      "position": [
+        18,
+        14
+      ]
+    },
+    {
+      "id": "red-cmd-1",
+      "name": "Napoléon",
+      "side": "red",
+      "type": "commander",
+      "position": [
+        25,
+        2
+      ],
+      "command_radius": 6
+    }
+  ],
+  "objectives": [
+    {
+      "id": "ligny_village",
+      "label": "Ligny Village",
+      "position": [
+        25,
+        20
+      ],
+      "points": 5
+    },
+    {
+      "id": "st_amand",
+      "label": "St. Amand Village",
+      "position": [
+        10,
+        19
+      ],
+      "points": 3
+    },
+    {
+      "id": "brye_crossroads",
+      "label": "Brye Crossroads",
+      "position": [
+        28,
+        10
+      ],
+      "points": 3
+    },
+    {
+      "id": "prussian_battery",
+      "label": "Prussian Artillery Position",
+      "position": [
+        23,
+        28
+      ],
+      "points": 2
+    }
+  ],
+  "starting_turn": 1,
+  "reinforcements": []
+}

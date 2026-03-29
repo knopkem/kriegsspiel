@@ -65,6 +65,7 @@ class FogOfWarEngine:
         units: Iterable[Unit],
         *,
         current_turn: int,
+        visibility_modifier: float = 1.0,
     ) -> dict[Side, VisibilitySnapshot]:
         all_units = list(units)
         units_by_side = self._group_active_units(all_units)
@@ -75,7 +76,7 @@ class FogOfWarEngine:
             friendly_units = units_by_side.get(side, [])
             visible_hexes: set[HexCoord] = set()
             for unit in friendly_units:
-                visible_hexes.update(self.visible_hexes_for_unit(unit))
+                visible_hexes.update(self.visible_hexes_for_unit(unit, visibility_modifier))
 
             explored = self._explored.setdefault(side, set())
             explored.update(visible_hexes)
@@ -107,11 +108,11 @@ class FogOfWarEngine:
 
         return snapshots
 
-    def visible_hexes_for_unit(self, unit: Unit) -> set[HexCoord]:
+    def visible_hexes_for_unit(self, unit: Unit, visibility_modifier: float = 1.0) -> set[HexCoord]:
         if unit.position is None or unit.is_removed:
             return set()
 
-        max_range = self.vision_range(unit)
+        max_range = max(1, round(self.vision_range(unit) * visibility_modifier))
         visible: set[HexCoord] = {unit.position}
         for coord in self.battle_map.coords():
             if coord == unit.position:

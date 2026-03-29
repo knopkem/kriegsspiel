@@ -1,0 +1,277 @@
+{
+  "scenario_id": "mockern_1813",
+  "title": "Battle of Möckern (16 October 1813)",
+  "description": "Part of the Battle of Leipzig. Prussian forces under Yorck (BLUE) storm across the River Elster to capture the fortified village of Möckern from the French (RED). The French hold a strong defensive line with a fort and artillery on the eastern hills.",
+  "map_rows": [
+    "...................w....................",
+    "...................w....................",
+    "...................w....................",
+    "...................w....................",
+    "........fffffff....w....................",
+    "........fffffff....w....................",
+    "........fffffff....w....................",
+    "........fffffff....w....................",
+    "........fffffff....w....................",
+    "........fffffff....w....................",
+    "........fffffff....w....................",
+    "...................w....................",
+    "...................w....hhhhh...........",
+    "...................w....hhhhh...........",
+    "...................w....hhhhh...........",
+    "...................w.#v.hhhhh...........",
+    "...................w.vv.hhhhh...........",
+    "........rrrrrrrrrrrrrrrrrrrrrrrrr.......",
+    "...................w....hhhhh...........",
+    "...................w....................",
+    "...................w....................",
+    "...................w....................",
+    "...................w....................",
+    "...................w....................",
+    "...................w....................",
+    ".....ffffffff......w....................",
+    ".....ffffffff......w....................",
+    ".....ffffffff......w....................",
+    ".....ffffffff......w....................",
+    ".....ffffffff......w....................",
+    ".....ffffffff......w....................",
+    ".....ffffffff......w....................",
+    "...................w....................",
+    "...................w....................",
+    "...................w...................."
+  ],
+  "units": [
+    {
+      "id": "blue-inf-1",
+      "name": "1. Leib-Infanterie-Regt.",
+      "side": "blue",
+      "type": "infantry",
+      "position": [
+        5,
+        16
+      ]
+    },
+    {
+      "id": "blue-inf-2",
+      "name": "2. Pommersche Inf.-Regt.",
+      "side": "blue",
+      "type": "infantry",
+      "position": [
+        10,
+        18
+      ]
+    },
+    {
+      "id": "blue-inf-3",
+      "name": "3. Ostpreuß. Inf.-Regt.",
+      "side": "blue",
+      "type": "infantry",
+      "position": [
+        8,
+        20
+      ]
+    },
+    {
+      "id": "blue-inf-4",
+      "name": "4. Pommersche Inf.-Regt.",
+      "side": "blue",
+      "type": "infantry",
+      "position": [
+        12,
+        13
+      ]
+    },
+    {
+      "id": "blue-cav-1",
+      "name": "Dragoner-Regiment",
+      "side": "blue",
+      "type": "cavalry",
+      "position": [
+        6,
+        14
+      ]
+    },
+    {
+      "id": "blue-cav-2",
+      "name": "Husaren-Regiment",
+      "side": "blue",
+      "type": "cavalry",
+      "position": [
+        5,
+        22
+      ]
+    },
+    {
+      "id": "blue-art-1",
+      "name": "Preußische Fußartillerie",
+      "side": "blue",
+      "type": "artillery",
+      "position": [
+        10,
+        14
+      ]
+    },
+    {
+      "id": "blue-skm-1",
+      "name": "Brandenburgische Jäger",
+      "side": "blue",
+      "type": "skirmisher",
+      "position": [
+        16,
+        17
+      ]
+    },
+    {
+      "id": "blue-skm-2",
+      "name": "Schlesische Jäger",
+      "side": "blue",
+      "type": "skirmisher",
+      "position": [
+        14,
+        22
+      ]
+    },
+    {
+      "id": "blue-cmd-1",
+      "name": "Yorck",
+      "side": "blue",
+      "type": "commander",
+      "position": [
+        8,
+        17
+      ],
+      "command_radius": 6
+    },
+    {
+      "id": "red-inf-1",
+      "name": "Möckern Garrison",
+      "side": "red",
+      "type": "infantry",
+      "position": [
+        22,
+        16
+      ]
+    },
+    {
+      "id": "red-inf-2",
+      "name": "Fort Defenders",
+      "side": "red",
+      "type": "infantry",
+      "position": [
+        22,
+        15
+      ]
+    },
+    {
+      "id": "red-inf-3",
+      "name": "Hillside Infantry",
+      "side": "red",
+      "type": "infantry",
+      "position": [
+        26,
+        15
+      ]
+    },
+    {
+      "id": "red-inf-4",
+      "name": "Réserve d'infanterie",
+      "side": "red",
+      "type": "infantry",
+      "position": [
+        25,
+        20
+      ]
+    },
+    {
+      "id": "red-cav-1",
+      "name": "Chasseurs (contre-attaque)",
+      "side": "red",
+      "type": "cavalry",
+      "position": [
+        28,
+        20
+      ]
+    },
+    {
+      "id": "red-cav-2",
+      "name": "Cavalerie de réserve",
+      "side": "red",
+      "type": "cavalry",
+      "position": [
+        30,
+        22
+      ]
+    },
+    {
+      "id": "red-art-1",
+      "name": "Batterie de position",
+      "side": "red",
+      "type": "artillery",
+      "position": [
+        26,
+        14
+      ]
+    },
+    {
+      "id": "red-skm-1",
+      "name": "Voltigeurs (rive est)",
+      "side": "red",
+      "type": "skirmisher",
+      "position": [
+        20,
+        16
+      ]
+    },
+    {
+      "id": "red-skm-2",
+      "name": "Tirailleurs",
+      "side": "red",
+      "type": "skirmisher",
+      "position": [
+        21,
+        19
+      ]
+    },
+    {
+      "id": "red-cmd-1",
+      "name": "Dombrowski",
+      "side": "red",
+      "type": "commander",
+      "position": [
+        30,
+        16
+      ],
+      "command_radius": 6
+    }
+  ],
+  "objectives": [
+    {
+      "id": "mockern_village",
+      "label": "Möckern Village",
+      "position": [
+        22,
+        16
+      ],
+      "points": 5
+    },
+    {
+      "id": "elster_bridge",
+      "label": "Elster Bridge",
+      "position": [
+        19,
+        17
+      ],
+      "points": 3
+    },
+    {
+      "id": "french_ridge",
+      "label": "French Artillery Ridge",
+      "position": [
+        26,
+        14
+      ],
+      "points": 3
+    }
+  ],
+  "starting_turn": 1,
+  "reinforcements": []
+}
